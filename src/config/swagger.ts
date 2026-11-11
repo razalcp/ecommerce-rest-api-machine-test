@@ -14,7 +14,7 @@ const definition: SwaggerDefinition = {
   info: {
     title: 'E-commerce REST API',
     description:
-      'A modular, layered REST API for an e-commerce platform. It provides health checks, customer registration and login, JWT access tokens, opaque refresh tokens, refresh-token rotation, logout, authenticated profile access, admin user management, public category browsing, and admin category management.',
+      'A modular, layered REST API for an e-commerce platform. It provides health checks, customer registration and login, JWT access tokens, opaque refresh tokens, refresh-token rotation, logout, authenticated profile access, admin user management, public category browsing, admin category management, and admin product management.',
     version: '1.0.0',
   },
   servers: [
@@ -39,6 +39,10 @@ const definition: SwaggerDefinition = {
     {
       name: 'Categories',
       description: 'Public category browsing and admin category management',
+    },
+    {
+      name: 'Products',
+      description: 'Admin product management',
     },
   ],
   components: {
@@ -608,6 +612,261 @@ const definition: SwaggerDefinition = {
             description:
               'Existing parent category ID. Set to null to move the category to the root. Omit to keep the current parent.',
             example: null,
+          },
+        },
+      },
+      Product: {
+        type: 'object',
+        required: [
+          'id',
+          'name',
+          'sku',
+          'description',
+          'price',
+          'salePrice',
+          'stock',
+          'category',
+          'status',
+          'createdAt',
+          'updatedAt',
+        ],
+        properties: {
+          id: {
+            type: 'string',
+            pattern: '^[a-fA-F0-9]{24}$',
+            example: '665f1b2c9a1b2c3d4e5f6795',
+          },
+          name: {
+            type: 'string',
+            minLength: 2,
+            maxLength: 150,
+            example: 'Samsung Galaxy S24',
+          },
+          sku: {
+            type: 'string',
+            minLength: 2,
+            maxLength: 50,
+            example: 'SAMSUNG-S24',
+          },
+          description: {
+            type: 'string',
+            maxLength: 2000,
+            example: 'Samsung smartphone',
+          },
+          price: {
+            type: 'number',
+            format: 'double',
+            description: 'Regular product price in INR.',
+            example: 79999.99,
+          },
+          salePrice: {
+            type: 'number',
+            format: 'double',
+            nullable: true,
+            description: 'Discounted sale price in INR, or null when not on sale.',
+            example: 74999.99,
+          },
+          stock: {
+            type: 'integer',
+            minimum: 0,
+            example: 25,
+          },
+          category: {
+            type: 'string',
+            pattern: '^[a-fA-F0-9]{24}$',
+            description: 'Category MongoDB ObjectId.',
+            example: '665f1b2c9a1b2c3d4e5f6789',
+          },
+          status: {
+            type: 'string',
+            enum: ['ACTIVE', 'INACTIVE'],
+            example: 'ACTIVE',
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-11-11T10:00:00.000Z',
+          },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-11-11T10:00:00.000Z',
+          },
+        },
+      },
+      ProductResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Product retrieved successfully',
+          },
+          data: {
+            $ref: '#/components/schemas/Product',
+          },
+        },
+      },
+      ProductListResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Products retrieved successfully',
+          },
+          data: {
+            type: 'object',
+            required: ['products', 'total', 'page', 'limit', 'totalPages'],
+            properties: {
+              products: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/Product',
+                },
+              },
+              total: {
+                type: 'integer',
+                example: 42,
+              },
+              page: {
+                type: 'integer',
+                example: 1,
+              },
+              limit: {
+                type: 'integer',
+                example: 10,
+              },
+              totalPages: {
+                type: 'integer',
+                example: 5,
+              },
+            },
+          },
+        },
+      },
+      CreateProductRequest: {
+        type: 'object',
+        required: ['name', 'sku', 'price', 'stock', 'category'],
+        additionalProperties: false,
+        properties: {
+          name: {
+            type: 'string',
+            minLength: 2,
+            maxLength: 150,
+            example: 'Samsung Galaxy S24',
+          },
+          sku: {
+            type: 'string',
+            minLength: 2,
+            maxLength: 50,
+            example: 'SAMSUNG-S24',
+          },
+          description: {
+            type: 'string',
+            maxLength: 2000,
+            example: 'Samsung smartphone',
+          },
+          price: {
+            type: 'number',
+            format: 'double',
+            exclusiveMinimum: true,
+            minimum: 0,
+            description: 'Regular product price in INR with at most two decimal places.',
+            example: 79999.99,
+          },
+          salePrice: {
+            type: 'number',
+            format: 'double',
+            nullable: true,
+            exclusiveMinimum: true,
+            minimum: 0,
+            description:
+              'Optional sale price in INR. Must not exceed price. Omit or set to null when not on sale.',
+            example: 74999.99,
+          },
+          stock: {
+            type: 'integer',
+            minimum: 0,
+            example: 25,
+          },
+          category: {
+            type: 'string',
+            pattern: '^[a-fA-F0-9]{24}$',
+            description: 'Existing category MongoDB ObjectId.',
+            example: '665f1b2c9a1b2c3d4e5f6789',
+          },
+          status: {
+            type: 'string',
+            enum: ['ACTIVE', 'INACTIVE'],
+            default: 'ACTIVE',
+            example: 'ACTIVE',
+          },
+        },
+      },
+      UpdateProductRequest: {
+        type: 'object',
+        minProperties: 1,
+        additionalProperties: false,
+        properties: {
+          name: {
+            type: 'string',
+            minLength: 2,
+            maxLength: 150,
+            example: 'Samsung Galaxy S24 Ultra',
+          },
+          sku: {
+            type: 'string',
+            minLength: 2,
+            maxLength: 50,
+            example: 'SAMSUNG-S24-ULTRA',
+          },
+          description: {
+            type: 'string',
+            maxLength: 2000,
+            example: 'Samsung flagship smartphone',
+          },
+          price: {
+            type: 'number',
+            format: 'double',
+            exclusiveMinimum: true,
+            minimum: 0,
+            description: 'Regular product price in INR with at most two decimal places.',
+            example: 78999.99,
+          },
+          salePrice: {
+            type: 'number',
+            format: 'double',
+            nullable: true,
+            exclusiveMinimum: true,
+            minimum: 0,
+            description:
+              'Sale price in INR. Set to null to clear it. Omit to keep the current value.',
+            example: null,
+          },
+          stock: {
+            type: 'integer',
+            minimum: 0,
+            example: 30,
+          },
+          category: {
+            type: 'string',
+            pattern: '^[a-fA-F0-9]{24}$',
+            description: 'Existing category MongoDB ObjectId.',
+            example: '665f1b2c9a1b2c3d4e5f6790',
+          },
+          status: {
+            type: 'string',
+            enum: ['ACTIVE', 'INACTIVE'],
+            example: 'INACTIVE',
           },
         },
       },

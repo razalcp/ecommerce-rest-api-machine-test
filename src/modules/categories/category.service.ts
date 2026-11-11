@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 import { AppError } from '../../shared/errors/app-error';
 import { HttpStatus } from '../../shared/errors/http-status';
+import { productRepository } from '../products/product.repository';
 import { categoryRepository } from './category.repository';
 import {
   CategoryAncestorUpdate,
@@ -14,6 +15,8 @@ import {
 const CATEGORY_NOT_FOUND_MESSAGE = 'Category not found';
 const PARENT_CATEGORY_NOT_FOUND_MESSAGE = 'Parent category not found';
 const CATEGORY_HAS_CHILDREN_MESSAGE = 'Category has child categories and cannot be deleted';
+const CATEGORY_HAS_PRODUCTS_MESSAGE =
+  'Cannot delete category because products are assigned to it.';
 const INVALID_CATEGORY_PARENT_MESSAGE = 'A category cannot be its own parent';
 const CIRCULAR_CATEGORY_REFERENCE_MESSAGE =
   'A category cannot be moved under one of its descendants';
@@ -126,6 +129,16 @@ const ensureCategoryCanBeDeleted = async (categoryId: string): Promise<void> => 
       CATEGORY_HAS_CHILDREN_MESSAGE,
       HttpStatus.CONFLICT,
       'CATEGORY_HAS_CHILDREN'
+    );
+  }
+
+  const hasProducts = await productRepository.existsByCategoryId(categoryId);
+
+  if (hasProducts) {
+    throw new AppError(
+      CATEGORY_HAS_PRODUCTS_MESSAGE,
+      HttpStatus.CONFLICT,
+      'CATEGORY_HAS_PRODUCTS'
     );
   }
 };

@@ -437,8 +437,9 @@ categoryRoutes.patch(
  *     tags: [Categories]
  *     summary: Delete a category
  *     description: >-
- *       Deletes a category only when it has no child categories. Child categories
- *       are never cascade-deleted. Admin access only.
+ *       Deletes a category only when it has no child categories and no products
+ *       are assigned to it. Child categories and products are never cascade-deleted.
+ *       Admin access only.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -500,16 +501,26 @@ categoryRoutes.patch(
  *               error:
  *                 code: CATEGORY_NOT_FOUND
  *       '409':
- *         description: Category has child categories
+ *         description: Category has child categories or assigned products
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
- *             example:
- *               success: false
- *               message: Category has child categories and cannot be deleted
- *               error:
- *                 code: CATEGORY_HAS_CHILDREN
+ *             examples:
+ *               children:
+ *                 summary: Category has child categories
+ *                 value:
+ *                   success: false
+ *                   message: Category has child categories and cannot be deleted
+ *                   error:
+ *                     code: CATEGORY_HAS_CHILDREN
+ *               products:
+ *                 summary: Products are assigned to the category
+ *                 value:
+ *                   success: false
+ *                   message: Cannot delete category because products are assigned to it.
+ *                   error:
+ *                     code: CATEGORY_HAS_PRODUCTS
  *       '422':
  *         description: Category ID validation failed
  *         content:
