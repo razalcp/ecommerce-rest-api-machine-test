@@ -1,7 +1,9 @@
 import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env';
+import { swaggerSpec, swaggerUiOptions } from './config/swagger';
 import authRoutes from './modules/auth/auth.routes';
 import healthRoutes from './modules/health/health.routes';
 import { errorHandler } from './shared/middleware/error-handler.middleware';
@@ -20,8 +22,13 @@ app.use(cors({ origin: corsOrigin }));
 
 app.use(express.json({ limit: '1mb' }));
 
-app.use('/api/v1/health', healthRoutes);
+app.use('/api/v1/health', healthRoutes);         
 app.use('/api/v1/auth', authRoutes);
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+app.get('/api-docs.json', (_req, res) => {
+  res.json(swaggerSpec);
+});
 
 app.use(notFoundHandler);
 app.use(errorHandler);

@@ -3,11 +3,24 @@ import { HttpStatus } from '../../shared/errors/http-status';
 import { hashPassword, verifyPassword } from '../../shared/utils/password.util';
 import { userRepository } from '../users/user.repository';
 import { USER_ROLES, UserDocument } from '../users/user.types';
-import { AuthResult, AuthUser, LoginInput, RegisterInput } from './auth.types';
+import {
+  AuthResult,
+  AuthTokens,
+  AuthUser,
+  LoginInput,
+  RegisterInput,
+} from './auth.types';
+import {
+  issueRefreshToken,
+  revokeRefreshToken,
+  revokeSessionById,
+  rotateRefreshToken,
+} from './refresh-token.service';
 import { createAccessToken } from './token.service';
 
 const EMAIL_ALREADY_EXISTS_MESSAGE = 'An account with this email already exists';
 const INVALID_CREDENTIALS_MESSAGE = 'Invalid email or password';
+const INVALID_REFRESH_TOKEN_MESSAGE = 'Invalid refresh token';
 
 const isDuplicateKeyError = (error: unknown): boolean => {
   return (
@@ -25,16 +38,21 @@ const toAuthUser = (user: UserDocument): AuthUser => ({
   role: user.role,
 });
 
-const buildAuthResult = (user: UserDocument): AuthResult => {
+const buildAuthResult = async (user: UserDocument): Promise<AuthResult> => {
   const token = createAccessToken({
     userId: user._id.toString(),
     role: user.role,
     tokenVersion: user.tokenVersion,
   });
+  const refresh = await issueRefreshToken(user._id);
 
   return {
     user: toAuthUser(user),
-    token,
+    tokens: {
+      ...token,
+      refreshToken: refresh.refreshToken,
+      refreshExpiresIn: refresh.refreshExpiresIn,
+    },
   };
 };
 
@@ -102,4 +120,41 @@ export const loginUser = async (input: LoginInput): Promise<AuthResult> => {
   }
 
   return buildAuthResult(user);
+};
+
+export const refreshTokens = async (refreshToken: string): Promise<AuthTokens> => {
+  const rotation = await rotateRefreshToken(refreshToken);
+  const user = await userRepository.findById(rotation.session.userId);
+
+  if (!user) {
+    await revokeSessionById(rotation.session._id);
+
+    throw new AppError(
+      INVALID_REFRESH_TOKEN_MESSAGE,
+      HttpStatus.UNAUTHORIZED,
+      'INVALID_REFRESH_TOKEN'
+    );
+  }
+
+  if (!user.isActive) {
+    await revokeSessionById(rotation.session._id);
+
+    throw new AppError('Account is inactive', HttpStatus.FORBIDDEN, 'ACCOUNT_INACTIVE');
+  }
+
+  const token = createAccessToken({
+    userId: user._id.toString(),
+    role: user.role,
+    tokenVersion: user.tokenVersion,
+  });
+
+  return {
+    ...token,
+    refreshToken: rotation.refreshToken,
+    refreshExpiresIn: rotation.refreshExpiresIn,
+  };
+};
+
+export const logoutUser = async (refreshToken: string): Promise<void> => {
+  await revokeRefreshToken(refreshToken);
 };

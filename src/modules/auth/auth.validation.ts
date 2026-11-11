@@ -28,3 +28,9 @@ export const loginSchema = z.object({
     .string({ error: 'Password is required' })
     .min(1, 'Password is required'),
 });
+
+export const refreshTokenSchema = z.strictObject({
+  refreshToken: z
+    .string({ error: 'Refresh token is required' })
+    .min(1, 'Refresh token is required'),
+});

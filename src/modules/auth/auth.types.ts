@@ -24,9 +24,18 @@ export interface TokenInfo {
   expiresIn: number;
 }
 
+export interface AuthTokens extends TokenInfo {
+  refreshToken: string;
+  refreshExpiresIn: number;
+}
+
 export interface AuthResult {
   user: AuthUser;
-  token: TokenInfo;
+  tokens: AuthTokens;
+}
+
+export interface RefreshTokenInput {
+  refreshToken: string;
 }
 
 export interface AccessTokenPayload {

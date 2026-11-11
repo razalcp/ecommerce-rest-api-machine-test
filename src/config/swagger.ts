@@ -1,0 +1,314 @@
+import path from 'path';
+import swaggerJSDoc from 'swagger-jsdoc';
+import type { SwaggerUiOptions } from 'swagger-ui-express';
+import { env } from './env';
+
+type SwaggerOptions = NonNullable<Parameters<typeof swaggerJSDoc>[0]>;
+type SwaggerDefinition = NonNullable<SwaggerOptions['definition']>;
+
+const routeFileExtension = path.extname(__filename).replace('.', '') || 'js';
+const modulesPath = path.resolve(__dirname, '../modules').replace(/\\/g, '/');
+
+const definition: SwaggerDefinition = {
+  openapi: '3.0.3',
+  info: {
+    title: 'E-commerce REST API',
+    description:
+      'A modular, layered REST API for an e-commerce platform. It provides health checks, customer registration and login, JWT access tokens, opaque refresh tokens, refresh-token rotation, and logout.',
+    version: '1.0.0',
+  },
+  servers: [
+    {
+      url: `http://localhost:${env.PORT}/api/v1`,
+      description: 'Local development server',
+    },
+  ],
+  tags: [
+    {
+      name: 'Health',
+      description: 'Service availability',
+    },
+    {
+      name: 'Auth',
+      description: 'Registration, login, token refresh, and logout',
+    },
+  ],
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description:
+          'Enter a valid JWT access token. Public authentication endpoints do not require an existing access token.',
+      },
+    },
+    schemas: {
+      SuccessResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Operation successful',
+          },
+          data: {
+            type: 'object',
+            additionalProperties: true,
+          },
+        },
+      },
+      ErrorResponse: {
+        type: 'object',
+        required: ['success', 'message', 'error'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: false,
+          },
+          message: {
+            type: 'string',
+            example: 'Readable error message',
+          },
+          error: {
+            type: 'object',
+            required: ['code'],
+            properties: {
+              code: {
+                type: 'string',
+                example: 'ERROR_CODE',
+              },
+            },
+          },
+        },
+      },
+      HealthResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'E-commerce API is running',
+          },
+          data: {
+            type: 'object',
+            required: ['service'],
+            properties: {
+              service: {
+                type: 'string',
+                example: 'ecommerce-rest-api',
+              },
+            },
+          },
+        },
+      },
+      AuthUser: {
+        type: 'object',
+        required: ['id', 'fullName', 'email', 'role'],
+        properties: {
+          id: {
+            type: 'string',
+            example: '665f1b2c9a1b2c3d4e5f6789',
+          },
+          fullName: {
+            type: 'string',
+            example: 'Jane Doe',
+          },
+          email: {
+            type: 'string',
+            format: 'email',
+            example: 'jane@example.com',
+          },
+          role: {
+            type: 'string',
+            enum: ['ADMIN', 'CUSTOMER'],
+            example: 'CUSTOMER',
+          },
+        },
+      },
+      AuthTokens: {
+        type: 'object',
+        required: [
+          'accessToken',
+          'refreshToken',
+          'tokenType',
+          'expiresIn',
+          'refreshExpiresIn',
+        ],
+        properties: {
+          accessToken: {
+            type: 'string',
+            description: 'Short-lived JWT access token.',
+            example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+          },
+          refreshToken: {
+            type: 'string',
+            description:
+              'Opaque refresh token. Store securely and never expose it in logs.',
+            example: '9s7fQ2m1Xk4p...',
+          },
+          tokenType: {
+            type: 'string',
+            enum: ['Bearer'],
+            example: 'Bearer',
+          },
+          expiresIn: {
+            type: 'integer',
+            description: 'Access-token lifetime in seconds.',
+            example: 900,
+          },
+          refreshExpiresIn: {
+            type: 'integer',
+            description: 'Refresh-token lifetime in seconds.',
+            example: 604800,
+          },
+        },
+      },
+      AuthResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Authentication successful',
+          },
+          data: {
+            type: 'object',
+            required: ['user', 'tokens'],
+            properties: {
+              user: {
+                $ref: '#/components/schemas/AuthUser',
+              },
+              tokens: {
+                $ref: '#/components/schemas/AuthTokens',
+              },
+            },
+          },
+        },
+      },
+      RefreshResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Token refreshed successfully',
+          },
+          data: {
+            type: 'object',
+            required: ['tokens'],
+            properties: {
+              tokens: {
+                $ref: '#/components/schemas/AuthTokens',
+              },
+            },
+          },
+        },
+      },
+      LogoutResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Logged out successfully',
+          },
+          data: {
+            type: 'object',
+            additionalProperties: false,
+            example: {},
+          },
+        },
+      },
+      RegisterRequest: {
+        type: 'object',
+        required: ['fullName', 'email', 'password'],
+        properties: {
+          fullName: {
+            type: 'string',
+            minLength: 2,
+            maxLength: 100,
+            example: 'Jane Doe',
+          },
+          email: {
+            type: 'string',
+            format: 'email',
+            example: 'jane@example.com',
+          },
+          password: {
+            type: 'string',
+            format: 'password',
+            minLength: 8,
+            description: 'Must not exceed 72 UTF-8 bytes.',
+            example: 'StrongPass123',
+          },
+        },
+      },
+      LoginRequest: {
+        type: 'object',
+        required: ['email', 'password'],
+        properties: {
+          email: {
+            type: 'string',
+            format: 'email',
+            example: 'jane@example.com',
+          },
+          password: {
+            type: 'string',
+            format: 'password',
+            example: 'StrongPass123',
+          },
+        },
+      },
+      RefreshTokenRequest: {
+        type: 'object',
+        required: ['refreshToken'],
+        properties: {
+          refreshToken: {
+            type: 'string',
+            example: '9s7fQ2m1Xk4p...',
+          },
+        },
+      },
+    },
+  },
+};
+
+const options: SwaggerOptions = {
+  definition,
+  apis: [`${modulesPath}/**/*.routes.${routeFileExtension}`],
+};
+
+export const swaggerSpec = swaggerJSDoc(options) as Record<string, unknown>;
+
+export const swaggerUiOptions: SwaggerUiOptions = {
+  explorer: true,
+  customSiteTitle: 'E-commerce REST API Docs',
+  swaggerOptions: {
+    persistAuthorization: true,
+    docExpansion: 'list',
+    filter: true,
+    displayRequestDuration: true,
+    tryItOutEnabled: true,
+  },
+};

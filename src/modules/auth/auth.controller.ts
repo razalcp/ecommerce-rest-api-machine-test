@@ -1,8 +1,14 @@
 import { Request, Response } from 'express';
 import { HttpStatus } from '../../shared/errors/http-status';
 import { ApiResponse } from '../../shared/types/api-response.type';
-import { loginUser, registerUser } from './auth.service';
-import { AuthResult, LoginInput, RegisterInput } from './auth.types';
+import { loginUser, logoutUser, refreshTokens, registerUser } from './auth.service';
+import {
+  AuthResult,
+  AuthTokens,
+  LoginInput,
+  RefreshTokenInput,
+  RegisterInput,
+} from './auth.types';
 
 export const register = async (
   req: Request<{}, {}, RegisterInput>,
@@ -12,7 +18,7 @@ export const register = async (
 
   const response: ApiResponse<AuthResult> = {
     success: true,
-    message: 'User registered successfully',
+    message: 'Authentication successful',
     data: result,
   };
 
@@ -27,8 +33,38 @@ export const login = async (
 
   const response: ApiResponse<AuthResult> = {
     success: true,
-    message: 'Login successful',
+    message: 'Authentication successful',
     data: result,
+  };
+
+  res.status(HttpStatus.OK).json(response);
+};
+
+export const refresh = async (
+  req: Request<{}, {}, RefreshTokenInput>,
+  res: Response
+): Promise<void> => {
+  const tokens = await refreshTokens(req.body.refreshToken);
+
+  const response: ApiResponse<{ tokens: AuthTokens }> = {
+    success: true,
+    message: 'Token refreshed successfully',
+    data: { tokens },
+  };
+
+  res.status(HttpStatus.OK).json(response);
+};
+
+export const logout = async (
+  req: Request<{}, {}, RefreshTokenInput>,
+  res: Response
+): Promise<void> => {
+  await logoutUser(req.body.refreshToken);
+
+  const response: ApiResponse<Record<string, never>> = {
+    success: true,
+    message: 'Logged out successfully',
+    data: {},
   };
 
   res.status(HttpStatus.OK).json(response);
