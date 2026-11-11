@@ -32,6 +32,7 @@ export interface CreateUserInput {
   email: string;
   passwordHash: string;
   role?: UserRole;
+  isActive?: boolean;
 }
 
 export interface UpdateProfileInput {

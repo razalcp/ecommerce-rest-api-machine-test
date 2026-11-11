@@ -94,6 +94,47 @@ Never commit your real `.env` file. It is excluded by `.gitignore`.
 4. Select **Connect** on the cluster, choose **Drivers**, and copy the connection string.
 5. Replace the placeholders in the connection string and set it as `MONGODB_URI` in `.env`.
 
+## Admin Seed
+
+The Admin account is created through a one-off seed script. There is no Admin registration API endpoint.
+
+The seed script uses the same environment configuration as the application, so `MONGODB_URI` and the other required application variables must be configured.
+
+### Admin Seed Configuration
+
+Set the following optional variables in `.env` only when you need to run the seed command:
+
+| Variable              | Required for seed | Description                                                             |
+| --------------------- | ----------------- | ----------------------------------------------------------------------- |
+| `ADMIN_SEED_NAME`     | Yes               | Admin display name, 2-100 characters                                    |
+| `ADMIN_SEED_EMAIL`    | Yes               | Admin email address; normalized to lowercase before lookup and creation |
+| `ADMIN_SEED_PASSWORD` | Yes               | Admin password, at least 16 characters and no more than 72 UTF-8 bytes  |
+
+Example:
+
+```dotenv
+ADMIN_SEED_NAME=System Administrator
+ADMIN_SEED_EMAIL=admin@gmail.com
+ADMIN_SEED_PASSWORD=replace-with-a-strong-password
+```
+
+The password in `.env.example` is only a placeholder. Replace it with a strong password before running the seed command. Never commit real Admin credentials.
+
+### Run the Admin Seed
+
+```bash
+npm run seed:admin
+```
+
+The script validates the Admin seed variables, connects to MongoDB using the existing database configuration, normalizes the email address, and checks for an existing user through the user repository.
+
+### Seed Idempotency
+
+- If the email does not exist, the script creates an active `ADMIN` user.
+- If the email already belongs to an `ADMIN`, the script reports that the account exists and makes no changes, including no password reset.
+- If the email belongs to a `CUSTOMER`, the script refuses to promote or modify that account and exits with a non-zero status.
+- Running the command repeatedly will not create duplicate Admin accounts.
+
 ## Development
 
 Start the development server with hot reload:
@@ -294,10 +335,11 @@ All errors, including validation failures, unknown routes, and unexpected failur
 
 | Script              | Description                                   |
 | ------------------- | --------------------------------------------- |
-| `npm run dev`       | Run the application in watch mode using tsx   |
-| `npm run build`     | Compile TypeScript into the `dist` directory  |
-| `npm start`         | Run the compiled application                  |
-| `npm run typecheck` | Run TypeScript type checking without emitting |
+| `npm run dev`        | Run the application in watch mode using tsx   |
+| `npm run build`      | Compile TypeScript into the `dist` directory  |
+| `npm start`          | Run the compiled application                  |
+| `npm run typecheck`  | Run TypeScript type checking without emitting |
+| `npm run seed:admin` | Create the initial Admin account from the seed env vars |
 
 ## Project Structure
 
@@ -314,6 +356,8 @@ src/
     middleware/
     types/
     utils/
+  scripts/
+    seed-admin.ts
   modules/
     auth/
       auth.controller.ts
