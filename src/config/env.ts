@@ -10,6 +10,14 @@ const envSchema = z.object({
     .string({ error: 'MONGODB_URI is required' })
     .min(1, 'MONGODB_URI is required'),
   CORS_ORIGIN: z.string().min(1).default('*'),
+  JWT_ACCESS_SECRET: z
+    .string({ error: 'JWT_ACCESS_SECRET is required' })
+    .min(32, 'JWT_ACCESS_SECRET must be at least 32 characters long'),
+  JWT_ACCESS_EXPIRES_IN_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(900),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
