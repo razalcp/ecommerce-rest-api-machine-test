@@ -14,7 +14,7 @@ const definition: SwaggerDefinition = {
   info: {
     title: 'E-commerce REST API',
     description:
-      'A modular, layered REST API for an e-commerce platform. It provides health checks, customer registration and login, JWT access tokens, opaque refresh tokens, refresh-token rotation, and logout.',
+      'A modular, layered REST API for an e-commerce platform. It provides health checks, customer registration and login, JWT access tokens, opaque refresh tokens, refresh-token rotation, logout, authenticated profile access, and admin user management.',
     version: '1.0.0',
   },
   servers: [
@@ -31,6 +31,10 @@ const definition: SwaggerDefinition = {
     {
       name: 'Auth',
       description: 'Registration, login, token refresh, and logout',
+    },
+    {
+      name: 'Users',
+      description: 'Authenticated profile access and admin user management',
     },
   ],
   components: {
@@ -287,6 +291,139 @@ const definition: SwaggerDefinition = {
           refreshToken: {
             type: 'string',
             example: '9s7fQ2m1Xk4p...',
+          },
+        },
+      },
+      UserProfile: {
+        type: 'object',
+        required: [
+          'id',
+          'fullName',
+          'email',
+          'role',
+          'isActive',
+          'createdAt',
+          'updatedAt',
+        ],
+        properties: {
+          id: {
+            type: 'string',
+            example: '665f1b2c9a1b2c3d4e5f6789',
+          },
+          fullName: {
+            type: 'string',
+            example: 'Jane Doe',
+          },
+          email: {
+            type: 'string',
+            format: 'email',
+            example: 'jane@example.com',
+          },
+          role: {
+            type: 'string',
+            enum: ['ADMIN', 'CUSTOMER'],
+            example: 'CUSTOMER',
+          },
+          isActive: {
+            type: 'boolean',
+            example: true,
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-01-01T10:00:00.000Z',
+          },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-01-01T10:00:00.000Z',
+          },
+        },
+      },
+      UserProfileResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Profile retrieved successfully',
+          },
+          data: {
+            $ref: '#/components/schemas/UserProfile',
+          },
+        },
+      },
+      UserListResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Users retrieved successfully',
+          },
+          data: {
+            type: 'object',
+            required: ['users', 'pagination'],
+            properties: {
+              users: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/UserProfile',
+                },
+              },
+              pagination: {
+                type: 'object',
+                required: ['page', 'limit', 'total', 'totalPages'],
+                properties: {
+                  page: {
+                    type: 'integer',
+                    example: 1,
+                  },
+                  limit: {
+                    type: 'integer',
+                    example: 10,
+                  },
+                  total: {
+                    type: 'integer',
+                    example: 42,
+                  },
+                  totalPages: {
+                    type: 'integer',
+                    example: 5,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      UpdateProfileRequest: {
+        type: 'object',
+        required: ['fullName'],
+        properties: {
+          fullName: {
+            type: 'string',
+            minLength: 2,
+            maxLength: 100,
+            example: 'Jane Smith',
+          },
+        },
+      },
+      UpdateUserStatusRequest: {
+        type: 'object',
+        required: ['isActive'],
+        properties: {
+          isActive: {
+            type: 'boolean',
+            example: false,
           },
         },
       },
