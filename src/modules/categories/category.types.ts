@@ -23,7 +23,13 @@ export interface CreateCategoryData {
 }
 
 export interface UpdateCategoryInput {
-  name: string;
+  name?: string;
+  parentId?: string | null;
+}
+
+export interface CategoryAncestorUpdate {
+  categoryId: Types.ObjectId;
+  ancestors: Types.ObjectId[];
 }
 
 export interface CategoryResponse {
@@ -35,7 +41,10 @@ export interface CategoryResponse {
   updatedAt: Date;
 }
 
-export interface CategoryTreeNode extends CategoryResponse {
+export interface CategoryTreeNode {
+  id: string;
+  name: string;
+  parentId: string | null;
   children: CategoryTreeNode[];
 }
 
@@ -44,6 +53,13 @@ export interface CategoryRepository {
   findById(categoryId: CategoryId): Promise<CategoryDocument | null>;
   findAll(): Promise<CategoryDocument[]>;
   updateName(categoryId: CategoryId, name: string): Promise<CategoryDocument | null>;
+  updateParentAndAncestors(
+    categoryId: CategoryId,
+    parentId: Types.ObjectId | null,
+    ancestors: Types.ObjectId[]
+  ): Promise<CategoryDocument | null>;
+  updateDescendantAncestors(updates: CategoryAncestorUpdate[]): Promise<void>;
+  findDescendantsByAncestorId(categoryId: CategoryId): Promise<CategoryDocument[]>;
   deleteById(categoryId: CategoryId): Promise<CategoryDocument | null>;
   hasChildren(categoryId: CategoryId): Promise<boolean>;
   findByParentId(parentId: CategoryId): Promise<CategoryDocument[]>;

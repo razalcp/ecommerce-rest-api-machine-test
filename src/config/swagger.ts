@@ -513,6 +513,62 @@ const definition: SwaggerDefinition = {
           },
         },
       },
+      CategoryTreeNode: {
+        type: 'object',
+        required: ['id', 'name', 'parentId', 'children'],
+        properties: {
+          id: {
+            type: 'string',
+            pattern: '^[a-fA-F0-9]{24}$',
+            example: '665f1b2c9a1b2c3d4e5f6789',
+          },
+          name: {
+            type: 'string',
+            minLength: 2,
+            maxLength: 100,
+            example: 'Electronics',
+          },
+          parentId: {
+            type: 'string',
+            nullable: true,
+            pattern: '^[a-fA-F0-9]{24}$',
+            description: 'Parent category ID, or null for a root category.',
+            example: null,
+          },
+          children: {
+            type: 'array',
+            items: {
+              $ref: '#/components/schemas/CategoryTreeNode',
+            },
+          },
+        },
+      },
+      CategoryTreeResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Category hierarchy retrieved successfully',
+          },
+          data: {
+            type: 'object',
+            required: ['categories'],
+            properties: {
+              categories: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/CategoryTreeNode',
+                },
+              },
+            },
+          },
+        },
+      },
       CreateCategoryRequest: {
         type: 'object',
         required: ['name'],
@@ -536,7 +592,7 @@ const definition: SwaggerDefinition = {
       },
       UpdateCategoryRequest: {
         type: 'object',
-        required: ['name'],
+        minProperties: 1,
         additionalProperties: false,
         properties: {
           name: {
@@ -544,6 +600,14 @@ const definition: SwaggerDefinition = {
             minLength: 2,
             maxLength: 100,
             example: 'Consumer Electronics',
+          },
+          parentId: {
+            type: 'string',
+            nullable: true,
+            pattern: '^[a-fA-F0-9]{24}$',
+            description:
+              'Existing parent category ID. Set to null to move the category to the root. Omit to keep the current parent.',
+            example: null,
           },
         },
       },

@@ -19,9 +19,15 @@ export const createCategorySchema = z.strictObject({
   parentId: parentCategoryIdSchema.nullable().optional(),
 });
 
-export const updateCategorySchema = z.strictObject({
-  name: categoryNameSchema,
-});
+export const updateCategorySchema = z
+  .strictObject({
+    name: categoryNameSchema.optional(),
+    parentId: parentCategoryIdSchema.nullable().optional(),
+  })
+  .refine((value) => value.name !== undefined || value.parentId !== undefined, {
+    message: 'At least one of name or parentId must be provided',
+    path: [],
+  });
 
 export const categoryIdParamSchema = z.strictObject({
   id: categoryIdSchema,

@@ -6,11 +6,13 @@ import {
   createCategory as createCategoryService,
   deleteCategory as deleteCategoryService,
   getCategoryById,
+  getCategoryTree as getCategoryTreeService,
   listCategories as listCategoriesService,
   updateCategory as updateCategoryService,
 } from './category.service';
 import {
   CategoryResponse,
+  CategoryTreeNode,
   CreateCategoryInput,
   UpdateCategoryInput,
 } from './category.types';
@@ -23,6 +25,18 @@ export const listCategories = async (_req: Request, res: Response): Promise<void
     success: true,
     message: 'Categories retrieved successfully',
     data: categories,
+  };
+
+  res.status(HttpStatus.OK).json(response);
+};
+
+export const getCategoryTree = async (_req: Request, res: Response): Promise<void> => {
+  const categories = await getCategoryTreeService();
+
+  const response: ApiResponse<{ categories: CategoryTreeNode[] }> = {
+    success: true,
+    message: 'Category hierarchy retrieved successfully',
+    data: { categories },
   };
 
   res.status(HttpStatus.OK).json(response);

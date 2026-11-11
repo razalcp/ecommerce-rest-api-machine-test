@@ -7,6 +7,7 @@ import {
   createCategory,
   deleteCategory,
   getCategory,
+  getCategoryTree,
   listCategories,
   updateCategory,
 } from './category.controller';
@@ -58,6 +59,49 @@ const categoryRoutes = Router();
  *                 code: INTERNAL_SERVER_ERROR
  */
 categoryRoutes.get('/', listCategories);
+
+/**
+ * @openapi
+ * /categories/tree:
+ *   get:
+ *     tags: [Categories]
+ *     summary: Get the category hierarchy
+ *     description: >-
+ *       Returns all categories as a nested tree with root categories at the top
+ *       level. Siblings are ordered alphabetically by name. Public access.
+ *     responses:
+ *       '200':
+ *         description: Category hierarchy retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/CategoryTreeResponse'
+ *             example:
+ *               success: true
+ *               message: Category hierarchy retrieved successfully
+ *               data:
+ *                 categories:
+ *                   - id: 665f1b2c9a1b2c3d4e5f6789
+ *                     name: Electronics
+ *                     parentId: null
+ *                     children:
+ *                       - id: 665f1b2c9a1b2c3d4e5f6790
+ *                         name: Mobiles
+ *                         parentId: 665f1b2c9a1b2c3d4e5f6789
+ *                         children: []
+ *       '500':
+ *         description: Unexpected server error or category hierarchy integrity failure
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               success: false
+ *               message: Internal server error
+ *               error:
+ *                 code: INTERNAL_SERVER_ERROR
+ */
+categoryRoutes.get('/tree', getCategoryTree);
 
 /**
  * @openapi
@@ -243,10 +287,12 @@ categoryRoutes.post(
  * /categories/{id}:
  *   patch:
  *     tags: [Categories]
- *     summary: Update a category name
+ *     summary: Update a category
  *     description: >-
- *       Updates only the category name. Parent reassignment is not supported in
- *       this phase. Admin access only.
+ *       Updates the category name, parent, or both. Moving a category to a new
+ *       parent recalculates the ancestors of the category and all of its
+ *       descendants. Set parentId to null to move the category to the root.
+ *       Admin access only.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -263,8 +309,24 @@ categoryRoutes.post(
  *         application/json:
  *           schema:
  *             $ref: '#/components/schemas/UpdateCategoryRequest'
- *           example:
- *             name: Consumer Electronics
+ *           examples:
+ *             nameOnly:
+ *               summary: Rename a category
+ *               value:
+ *                 name: Consumer Electronics
+ *             moveToParent:
+ *               summary: Move a category under another category
+ *               value:
+ *                 parentId: 665f1b2c9a1b2c3d4e5f6791
+ *             moveToRoot:
+ *               summary: Move a category to the root
+ *               value:
+ *                 parentId: null
+ *             combined:
+ *               summary: Rename and move a category
+ *               value:
+ *                 name: Smartphones
+ *                 parentId: 665f1b2c9a1b2c3d4e5f6792
  *     responses:
  *       '200':
  *         description: Category updated successfully
@@ -305,16 +367,38 @@ categoryRoutes.post(
  *               error:
  *                 code: FORBIDDEN
  *       '404':
- *         description: Category not found
+ *         description: Category or requested parent category not found
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  *             example:
  *               success: false
- *               message: Category not found
+ *               message: Parent category not found
  *               error:
  *                 code: CATEGORY_NOT_FOUND
+ *       '400':
+ *         description: A category cannot be its own parent
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               success: false
+ *               message: A category cannot be its own parent
+ *               error:
+ *                 code: INVALID_CATEGORY_PARENT
+ *       '409':
+ *         description: A category cannot be moved under one of its descendants
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               success: false
+ *               message: A category cannot be moved under one of its descendants
+ *               error:
+ *                 code: CIRCULAR_CATEGORY_REFERENCE
  *       '422':
  *         description: Category ID or request body validation failed
  *         content:
@@ -323,7 +407,7 @@ categoryRoutes.post(
  *               $ref: '#/components/schemas/ErrorResponse'
  *             example:
  *               success: false
- *               message: 'name: Category name must be at least 2 characters long'
+ *               message: At least one of name or parentId must be provided
  *               error:
  *                 code: VALIDATION_ERROR
  *       '500':
