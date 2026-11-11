@@ -14,7 +14,7 @@ const definition: SwaggerDefinition = {
   info: {
     title: 'E-commerce REST API',
     description:
-      'A modular, layered REST API for an e-commerce platform. It provides health checks, customer registration and login, JWT access tokens, opaque refresh tokens, refresh-token rotation, logout, authenticated profile access, and admin user management.',
+      'A modular, layered REST API for an e-commerce platform. It provides health checks, customer registration and login, JWT access tokens, opaque refresh tokens, refresh-token rotation, logout, authenticated profile access, admin user management, public category browsing, and admin category management.',
     version: '1.0.0',
   },
   servers: [
@@ -36,6 +36,10 @@ const definition: SwaggerDefinition = {
       name: 'Users',
       description: 'Authenticated profile access and admin user management',
     },
+    {
+      name: 'Categories',
+      description: 'Public category browsing and admin category management',
+    },
   ],
   components: {
     securitySchemes: {
@@ -44,7 +48,7 @@ const definition: SwaggerDefinition = {
         scheme: 'bearer',
         bearerFormat: 'JWT',
         description:
-          'Enter a valid JWT access token. Public authentication endpoints do not require an existing access token.',
+          'Enter a valid JWT access token. Public authentication and category-read endpoints do not require an existing access token.',
       },
     },
     schemas: {
@@ -424,6 +428,122 @@ const definition: SwaggerDefinition = {
           isActive: {
             type: 'boolean',
             example: false,
+          },
+        },
+      },
+      Category: {
+        type: 'object',
+        required: ['id', 'name', 'parentId', 'ancestors', 'createdAt', 'updatedAt'],
+        properties: {
+          id: {
+            type: 'string',
+            pattern: '^[a-fA-F0-9]{24}$',
+            example: '665f1b2c9a1b2c3d4e5f6789',
+          },
+          name: {
+            type: 'string',
+            minLength: 2,
+            maxLength: 100,
+            example: 'Electronics',
+          },
+          parentId: {
+            type: 'string',
+            nullable: true,
+            pattern: '^[a-fA-F0-9]{24}$',
+            description: 'Parent category ID, or null for a root category.',
+            example: null,
+          },
+          ancestors: {
+            type: 'array',
+            description:
+              'Ancestor category IDs ordered from root to immediate parent.',
+            items: {
+              type: 'string',
+              pattern: '^[a-fA-F0-9]{24}$',
+              example: '665f1b2c9a1b2c3d4e5f6789',
+            },
+            example: [],
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-01-01T10:00:00.000Z',
+          },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-01-01T10:00:00.000Z',
+          },
+        },
+      },
+      CategoryResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Category retrieved successfully',
+          },
+          data: {
+            $ref: '#/components/schemas/Category',
+          },
+        },
+      },
+      CategoryListResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Categories retrieved successfully',
+          },
+          data: {
+            type: 'array',
+            items: {
+              $ref: '#/components/schemas/Category',
+            },
+          },
+        },
+      },
+      CreateCategoryRequest: {
+        type: 'object',
+        required: ['name'],
+        additionalProperties: false,
+        properties: {
+          name: {
+            type: 'string',
+            minLength: 2,
+            maxLength: 100,
+            example: 'Electronics',
+          },
+          parentId: {
+            type: 'string',
+            nullable: true,
+            pattern: '^[a-fA-F0-9]{24}$',
+            description:
+              'Existing parent category ID. Omit or set to null to create a root category.',
+            example: null,
+          },
+        },
+      },
+      UpdateCategoryRequest: {
+        type: 'object',
+        required: ['name'],
+        additionalProperties: false,
+        properties: {
+          name: {
+            type: 'string',
+            minLength: 2,
+            maxLength: 100,
+            example: 'Consumer Electronics',
           },
         },
       },

@@ -5,6 +5,7 @@ import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env';
 import { swaggerSpec, swaggerUiOptions } from './config/swagger';
 import authRoutes from './modules/auth/auth.routes';
+import categoryRoutes from './modules/categories/category.routes';
 import healthRoutes from './modules/health/health.routes';
 import userRoutes from './modules/users/user.routes';
 import { errorHandler } from './shared/middleware/error-handler.middleware';
@@ -26,6 +27,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use('/api/v1/health', healthRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/categories', categoryRoutes);
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
 app.get('/api-docs.json', (_req, res) => {

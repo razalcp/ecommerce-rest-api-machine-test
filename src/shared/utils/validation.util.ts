@@ -5,7 +5,7 @@ import { HttpStatus } from '../errors/http-status';
 export const formatZodIssues = (error: ZodError): string => {
   return error.issues
     .map((issue) => {
-      const path = issue.path.join('.');
+      const path = issue.path?.join('.') ?? '';
       return path ? `${path}: ${issue.message}` : issue.message;
     })
     .join(', ');
