@@ -6,6 +6,8 @@ import {
   createProduct as createProductService,
   deleteProduct as deleteProductService,
   getProductById,
+  getPublicProductById,
+  getPublicProducts,
   listAdminProducts as listAdminProductsService,
   updateProduct as updateProductService,
 } from './product.service';
@@ -13,12 +15,15 @@ import {
   CreateProductInput,
   PaginatedProductResult,
   ProductAdminListQuery,
+  PublicPaginatedProductResult,
+  PublicProductListQuery,
   SafeProductResponse,
   UpdateProductInput,
 } from './product.types';
 import {
   productAdminListQuerySchema,
   productIdParamSchema,
+  publicProductListQuerySchema,
 } from './product.validation';
 
 export const createProduct = async (
@@ -50,6 +55,41 @@ export const listAdminProducts = async (
     success: true,
     message: 'Products retrieved successfully',
     data: result,
+  };
+
+  res.status(HttpStatus.OK).json(response);
+};
+
+export const listPublicProducts = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const query: PublicProductListQuery = parseWithSchema(
+    publicProductListQuerySchema,
+    req.query
+  );
+  const result = await getPublicProducts(query);
+
+  const response: ApiResponse<PublicPaginatedProductResult<SafeProductResponse>> = {
+    success: true,
+    message: 'Products retrieved successfully',
+    data: result,
+  };
+
+  res.status(HttpStatus.OK).json(response);
+};
+
+export const getPublicProduct = async (
+  req: Request<{ id: string }>,
+  res: Response
+): Promise<void> => {
+  const { id } = parseWithSchema(productIdParamSchema, req.params);
+  const product = await getPublicProductById(id);
+
+  const response: ApiResponse<SafeProductResponse> = {
+    success: true,
+    message: 'Product retrieved successfully',
+    data: product,
   };
 
   res.status(HttpStatus.OK).json(response);

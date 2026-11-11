@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import { AppError } from '../../shared/errors/app-error';
 import { HttpStatus } from '../../shared/errors/http-status';
 import { categoryRepository } from '../categories/category.repository';
@@ -9,6 +10,9 @@ import {
   PRODUCT_STATUSES,
   ProductAdminListQuery,
   ProductDocument,
+  ProductRecord,
+  PublicPaginatedProductResult,
+  PublicProductListQuery,
   SafeProductResponse,
   UpdateProductData,
   UpdateProductInput,
@@ -31,7 +35,7 @@ const isDuplicateKeyError = (error: unknown): boolean => {
   );
 };
 
-const toSafeProductResponse = (product: ProductDocument): SafeProductResponse => ({
+const toSafeProductResponse = (product: ProductRecord): SafeProductResponse => ({
   id: product._id.toString(),
   name: product.name,
   sku: product.sku,
@@ -71,6 +75,31 @@ const findCategoryOrThrow = async (categoryId: string): Promise<CategoryDocument
   }
 
   return category;
+};
+
+const resolveCategoryAndDescendantIds = async (
+  categoryId: string
+): Promise<Types.ObjectId[]> => {
+  const category = await findCategoryOrThrow(categoryId);
+  const descendants = await categoryRepository.findDescendantsByAncestorId(category._id);
+
+  return [category._id, ...descendants.map((descendant) => descendant._id)];
+};
+
+const findActiveProductOrThrow = async (
+  productId: string
+): Promise<ProductDocument> => {
+  const product = await productRepository.findActiveById(productId);
+
+  if (!product) {
+    throw new AppError(
+      PRODUCT_NOT_FOUND_MESSAGE,
+      HttpStatus.NOT_FOUND,
+      'PRODUCT_NOT_FOUND'
+    );
+  }
+
+  return product;
 };
 
 const validateEffectiveSalePrice = (price: number, salePrice: number | null): void => {
@@ -133,6 +162,32 @@ export const getProductById = async (
   productId: string
 ): Promise<SafeProductResponse> => {
   const product = await findProductOrThrow(productId);
+  return toSafeProductResponse(product);
+};
+
+export const getPublicProducts = async (
+  query: PublicProductListQuery
+): Promise<PublicPaginatedProductResult<SafeProductResponse>> => {
+  const { page, limit, sortBy, sortOrder, categoryId, ...filters } = query;
+  const categoryIds = categoryId
+    ? await resolveCategoryAndDescendantIds(categoryId)
+    : undefined;
+  const result = await productRepository.findActiveProducts(
+    { ...filters, categoryIds },
+    { page, limit },
+    { sortBy, sortOrder }
+  );
+
+  return {
+    products: result.products.map(toSafeProductResponse),
+    pagination: result.pagination,
+  };
+};
+
+export const getPublicProductById = async (
+  productId: string
+): Promise<SafeProductResponse> => {
+  const product = await findActiveProductOrThrow(productId);
   return toSafeProductResponse(product);
 };
 

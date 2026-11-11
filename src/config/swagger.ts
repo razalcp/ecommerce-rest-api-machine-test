@@ -14,7 +14,7 @@ const definition: SwaggerDefinition = {
   info: {
     title: 'E-commerce REST API',
     description:
-      'A modular, layered REST API for an e-commerce platform. It provides health checks, customer registration and login, JWT access tokens, opaque refresh tokens, refresh-token rotation, logout, authenticated profile access, admin user management, public category browsing, admin category management, and admin product management.',
+      'A modular, layered REST API for an e-commerce platform. It provides health checks, customer registration and login, JWT access tokens, opaque refresh tokens, refresh-token rotation, logout, authenticated profile access, admin user management, public category browsing, admin category management, public product browsing, and admin product management.',
     version: '1.0.0',
   },
   servers: [
@@ -42,7 +42,7 @@ const definition: SwaggerDefinition = {
     },
     {
       name: 'Products',
-      description: 'Admin product management',
+      description: 'Public product browsing and admin product management',
     },
   ],
   components: {
@@ -748,6 +748,54 @@ const definition: SwaggerDefinition = {
               totalPages: {
                 type: 'integer',
                 example: 5,
+              },
+            },
+          },
+        },
+      },
+      PublicProductListResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Products retrieved successfully',
+          },
+          data: {
+            type: 'object',
+            required: ['products', 'pagination'],
+            properties: {
+              products: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/Product',
+                },
+              },
+              pagination: {
+                type: 'object',
+                required: ['page', 'limit', 'total', 'totalPages'],
+                properties: {
+                  page: {
+                    type: 'integer',
+                    example: 1,
+                  },
+                  limit: {
+                    type: 'integer',
+                    example: 10,
+                  },
+                  total: {
+                    type: 'integer',
+                    example: 42,
+                  },
+                  totalPages: {
+                    type: 'integer',
+                    example: 5,
+                  },
+                },
               },
             },
           },

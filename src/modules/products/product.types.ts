@@ -7,6 +7,23 @@ export const PRODUCT_STATUSES = {
 
 export type ProductStatus = (typeof PRODUCT_STATUSES)[keyof typeof PRODUCT_STATUSES];
 
+export const PRODUCT_SORT_FIELDS = {
+  CREATED_AT: 'createdAt',
+  NAME: 'name',
+  PRICE: 'price',
+} as const;
+
+export type ProductSortField =
+  (typeof PRODUCT_SORT_FIELDS)[keyof typeof PRODUCT_SORT_FIELDS];
+
+export const PRODUCT_SORT_ORDERS = {
+  ASC: 'asc',
+  DESC: 'desc',
+} as const;
+
+export type ProductSortOrder =
+  (typeof PRODUCT_SORT_ORDERS)[keyof typeof PRODUCT_SORT_ORDERS];
+
 export interface Product {
   name: string;
   sku: string;
@@ -21,6 +38,7 @@ export interface Product {
 }
 
 export type ProductDocument = HydratedDocument<Product>;
+export type ProductRecord = Product & { _id: Types.ObjectId };
 export type ProductId = string | Types.ObjectId;
 
 export interface CreateProductInput {
@@ -79,6 +97,41 @@ export interface ProductPagination {
 
 export type ProductAdminListQuery = ProductAdminFilters & ProductPagination;
 
+export interface PublicProductFilters {
+  search?: string;
+  categoryIds?: Types.ObjectId[];
+  minPrice?: number;
+  maxPrice?: number;
+}
+
+export interface ProductSorting {
+  sortBy: ProductSortField;
+  sortOrder: ProductSortOrder;
+}
+
+export interface PublicProductListQuery {
+  search?: string;
+  categoryId?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sortBy: ProductSortField;
+  sortOrder: ProductSortOrder;
+  page: number;
+  limit: number;
+}
+
+export interface PublicProductPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PublicPaginatedProductResult<TProduct = ProductRecord> {
+  products: TProduct[];
+  pagination: PublicProductPagination;
+}
+
 export interface SafeProductResponse {
   id: string;
   name: string;
@@ -118,5 +171,11 @@ export interface ProductRepository {
     filters: ProductAdminFilters,
     pagination: ProductPagination
   ): Promise<PaginatedProductResult>;
+  findActiveProducts(
+    filters: PublicProductFilters,
+    pagination: ProductPagination,
+    sorting: ProductSorting
+  ): Promise<PublicPaginatedProductResult>;
+  findActiveById(productId: ProductId): Promise<ProductDocument | null>;
   existsByCategoryId(categoryId: ProductId): Promise<boolean>;
 }

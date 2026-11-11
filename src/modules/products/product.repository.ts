@@ -1,4 +1,4 @@
-import { QueryFilter, Types } from 'mongoose';
+import { PipelineStage, QueryFilter, Types } from 'mongoose';
 import { ProductModel } from './product.model';
 import {
   CreateProductData,
@@ -8,10 +8,24 @@ import {
   ProductDocument,
   ProductId,
   ProductPagination,
+  ProductRecord,
   ProductRepository,
+  ProductSorting,
+  PRODUCT_SORT_FIELDS,
+  PRODUCT_SORT_ORDERS,
   PRODUCT_STATUSES,
+  PublicPaginatedProductResult,
+  PublicProductFilters,
   UpdateProductData,
 } from './product.types';
+
+const escapeRegex = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+interface ActiveProductFacetResult {
+  products: ProductRecord[];
+  metadata: Array<{ total: number }>;
+}
 
 export class MongooseProductRepository implements ProductRepository {
   private buildFilter(filters: ProductAdminFilters): QueryFilter<Product> {
@@ -26,6 +40,34 @@ export class MongooseProductRepository implements ProductRepository {
     }
 
     return filter;
+  }
+
+  private buildActiveFilter(filters: PublicProductFilters): QueryFilter<Product> {
+    const filter: QueryFilter<Product> = { status: PRODUCT_STATUSES.ACTIVE };
+
+    if (filters.search) {
+      const search = escapeRegex(filters.search.trim());
+
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { sku: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    if (filters.categoryIds && filters.categoryIds.length > 0) {
+      filter.category = { $in: filters.categoryIds };
+    }
+
+    return filter;
+  }
+
+  private buildActiveSort(sorting: ProductSorting): Record<string, 1 | -1> {
+    const direction = sorting.sortOrder === PRODUCT_SORT_ORDERS.ASC ? 1 : -1;
+    const sortField =
+      sorting.sortBy === PRODUCT_SORT_FIELDS.PRICE ? 'effectivePrice' : sorting.sortBy;
+
+    return { [sortField]: direction, _id: direction };
   }
 
   public async create(productData: CreateProductData): Promise<ProductDocument> {
@@ -90,6 +132,64 @@ export class MongooseProductRepository implements ProductRepository {
       limit,
       totalPages: total === 0 ? 0 : Math.ceil(total / limit),
     };
+  }
+
+  public async findActiveProducts(
+    filters: PublicProductFilters,
+    pagination: ProductPagination,
+    sorting: ProductSorting
+  ): Promise<PublicPaginatedProductResult> {
+    const { page, limit } = pagination;
+    const skip = (page - 1) * limit;
+    const pipeline: PipelineStage[] = [
+      { $match: this.buildActiveFilter(filters) as Record<string, unknown> },
+      { $addFields: { effectivePrice: { $ifNull: ['$salePrice', '$price'] } } },
+    ];
+
+    const priceRange: Record<string, number> = {};
+
+    if (filters.minPrice !== undefined) {
+      priceRange.$gte = filters.minPrice;
+    }
+
+    if (filters.maxPrice !== undefined) {
+      priceRange.$lte = filters.maxPrice;
+    }
+
+    if (Object.keys(priceRange).length > 0) {
+      pipeline.push({ $match: { effectivePrice: priceRange } });
+    }
+
+    pipeline.push({
+      $facet: {
+        products: [
+          { $sort: this.buildActiveSort(sorting) },
+          { $skip: skip },
+          { $limit: limit },
+        ],
+        metadata: [{ $count: 'total' }],
+      },
+    });
+
+    const [result] = await ProductModel.aggregate<ActiveProductFacetResult>(pipeline).exec();
+    const total = result?.metadata[0]?.total ?? 0;
+
+    return {
+      products: result?.products ?? [],
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    };
+  }
+
+  public async findActiveById(productId: ProductId): Promise<ProductDocument | null> {
+    return ProductModel.findOne({
+      _id: productId,
+      status: PRODUCT_STATUSES.ACTIVE,
+    }).exec();
   }
 
   public async existsByCategoryId(categoryId: ProductId): Promise<boolean> {
