@@ -18,7 +18,7 @@ const seedEnvSchema = z.object({
     .email('ADMIN_SEED_EMAIL must be a valid email address'),
   ADMIN_SEED_PASSWORD: z
     .string({ error: 'ADMIN_SEED_PASSWORD is required' })
-    .min(5, 'ADMIN_SEED_PASSWORD must be at least 16 characters long')
+    .min(5, 'ADMIN_SEED_PASSWORD must be at least 5 characters long')
     .refine(
       (password) => Buffer.byteLength(password, 'utf8') <= 72,
       'ADMIN_SEED_PASSWORD must not exceed 72 UTF-8 bytes'

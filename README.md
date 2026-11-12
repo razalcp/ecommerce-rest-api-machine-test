@@ -1,27 +1,103 @@
 # E-commerce REST API
 
-A modular, layered REST API for an e-commerce platform built with Node.js, TypeScript, and Express.js. It uses MongoDB with Mongoose, validates configuration and requests with Zod, and follows SOLID principles with application initialization separated from server startup.
+A modular, layered REST API for an e-commerce platform built with Node.js, TypeScript, Express.js, MongoDB, Mongoose, and Zod. It provides JWT authentication with rotating refresh tokens, user management, nested categories, product search and filtering, customer checkout, order history, admin order management, and safe inventory compensation on standalone MongoDB.
+
+This repository does not include Docker, deployment, or hosting configuration.
 
 ## Technology Stack
 
-- Node.js
-- TypeScript
-- Express.js
-- MongoDB with Mongoose
-- Zod (environment and request validation)
-- JSON Web Tokens (jsonwebtoken)
-- bcryptjs (password hashing)
+- Node.js with npm
+- TypeScript 5.9 (strict mode)
+- Express.js 5
+- MongoDB with Mongoose 9
+- Zod 4 for environment and request validation
+- JSON Web Tokens via `jsonwebtoken`
+- bcryptjs for password hashing
 - dotenv
 - Helmet
 - CORS
-- Swagger UI with swagger-jsdoc
-- npm
+- Swagger UI and swagger-jsdoc
+- tsx for development and tests
+- Node.js built-in test runner (`node:test`)
+
+## Architecture
+
+The application uses a modular layered architecture:
+
+```text
+Routes
+  ↓
+Controllers
+  ↓
+Services
+  ↓
+Repositories
+  ↓
+Mongoose Models
+```
+
+- Routes define HTTP paths, middleware, and OpenAPI documentation.
+- Controllers parse validated input and build HTTP responses.
+- Services own business rules and orchestration.
+- Repositories own MongoDB persistence queries and atomic updates.
+- Models define schemas, validation, indexes, and safe serialization.
+- Shared middleware provides authentication, role authorization, validation, and centralized errors.
+
+`src/app.ts` builds the Express application. `src/server.ts` connects to MongoDB and starts the HTTP server.
+
+## Project Structure
+
+```text
+src/
+  app.ts
+  server.ts
+  config/
+    database.ts
+    env.ts
+    swagger.ts
+  shared/
+    errors/
+      app-error.ts
+      http-status.ts
+      not-found.error.ts
+    middleware/
+      auth.middleware.ts
+      error-handler.middleware.ts
+      not-found.middleware.ts
+      role.middleware.ts
+      validate.middleware.ts
+    types/
+      api-response.type.ts
+      auth-user.type.ts
+      express.d.ts
+    utils/
+      money.util.ts
+      password.util.ts
+      validation.util.ts
+  scripts/
+    seed-admin.ts
+  modules/
+    auth/
+    categories/
+    health/
+    orders/
+    products/
+    users/
+tests/
+  orders/
+    order.management.test.ts
+    order.service.test.ts
+docs/
+  order-inventory-design.md
+```
 
 ## Prerequisites
 
 - Node.js v20 or later
 - npm
-- MongoDB running locally, or a MongoDB Atlas cluster
+- A running MongoDB instance
+
+The project is intended for an existing standalone local MongoDB deployment. It does not configure or require a replica set, and it does not use multi-document transactions.
 
 ## Installation
 
@@ -31,23 +107,37 @@ A modular, layered REST API for an e-commerce platform built with Node.js, TypeS
    npm install
    ```
 
-2. Create your local environment file from the example:
-
-   ```bash
-  .env.example .env
-   ```
-
-   On Windows PowerShell:
+2. Create your local environment file:
 
    ```powershell
    Copy-Item .env.example .env
    ```
 
-3. Fill in the values in `.env` as described below.
+   On macOS/Linux:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Review and update the values in `.env`.
+
+Never commit your real `.env` file. It is excluded by `.gitignore`.
+
+## Local MongoDB Setup
+
+Start MongoDB locally. The default local port is `27017`.
+
+Set `MONGODB_URI` in `.env`, for example:
+
+```dotenv
+MONGODB_URI=mongodb://127.0.0.1:27017/ecommerce-rest-api
+```
+
+The server connects to MongoDB before accepting HTTP requests. If the connection fails, startup fails with a non-zero exit code.
 
 ## Environment Configuration
 
-The application validates all environment variables on startup using Zod and fails fast with a clear message if any value is missing or invalid.
+The application validates configuration on startup using Zod and fails fast when a required value is missing or invalid.
 
 | Variable                           | Required | Default       | Description                                             |
 | ---------------------------------- | -------- | ------------- | ------------------------------------------------------- |
@@ -59,7 +149,15 @@ The application validates all environment variables on startup using Zod and fai
 | `JWT_ACCESS_EXPIRES_IN_SECONDS`    | No       | `900`         | Access-token lifetime in seconds                        |
 | `REFRESH_TOKEN_EXPIRES_IN_SECONDS` | No       | `604800`      | Refresh-token lifetime in seconds                       |
 
-Example `.env` for local MongoDB:
+The following variables are optional for the application and are required only when running the Admin seed command:
+
+| Variable              | Required for seed | Description                                                             |
+| --------------------- | ----------------- | ----------------------------------------------------------------------- |
+| `ADMIN_SEED_NAME`     | Yes               | Admin display name, 2-100 characters                                    |
+| `ADMIN_SEED_EMAIL`    | Yes               | Admin email address; normalized to lowercase before lookup and creation |
+| `ADMIN_SEED_PASSWORD` | Yes               | Admin password, at least 16 characters and no more than 72 UTF-8 bytes  |
+
+Example local configuration:
 
 ```dotenv
 NODE_ENV=development
@@ -71,69 +169,7 @@ JWT_ACCESS_EXPIRES_IN_SECONDS=900
 REFRESH_TOKEN_EXPIRES_IN_SECONDS=604800
 ```
 
-The `.env.example` file contains an Atlas-style `MONGODB_URI` placeholder. Replace it with the local URI above for local development, or use your Atlas connection string.
-
-Never commit your real `.env` file. It is excluded by `.gitignore`.
-
-## Local MongoDB Development
-
-1. Start MongoDB locally. The default local port is `27017`.
-2. Set `MONGODB_URI` to a local database URI, for example:
-
-   ```dotenv
-   MONGODB_URI=mongodb://127.0.0.1:27017/ecommerce-rest-api
-   ```
-
-3. Start the application. The server connects to MongoDB before accepting HTTP requests. If the connection fails, the process logs the error and exits with a non-zero status.
-
-### Optional: MongoDB Atlas
-
-1. Sign in to [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) and create a cluster.
-2. Create a database user with read/write access to your application database.
-3. Add your current IP address, or an appropriate range, under **Network Access**.
-4. Select **Connect** on the cluster, choose **Drivers**, and copy the connection string.
-5. Replace the placeholders in the connection string and set it as `MONGODB_URI` in `.env`.
-
-## Admin Seed
-
-The Admin account is created through a one-off seed script. There is no Admin registration API endpoint.
-
-The seed script uses the same environment configuration as the application, so `MONGODB_URI` and the other required application variables must be configured.
-
-### Admin Seed Configuration
-
-Set the following optional variables in `.env` only when you need to run the seed command:
-
-| Variable              | Required for seed | Description                                                             |
-| --------------------- | ----------------- | ----------------------------------------------------------------------- |
-| `ADMIN_SEED_NAME`     | Yes               | Admin display name, 2-100 characters                                    |
-| `ADMIN_SEED_EMAIL`    | Yes               | Admin email address; normalized to lowercase before lookup and creation |
-| `ADMIN_SEED_PASSWORD` | Yes               | Admin password, at least 16 characters and no more than 72 UTF-8 bytes  |
-
-Example:
-
-```dotenv
-ADMIN_SEED_NAME=System Administrator
-ADMIN_SEED_EMAIL=admin@gmail.com
-ADMIN_SEED_PASSWORD=replace-with-a-strong-password
-```
-
-The password in `.env.example` is only a placeholder. Replace it with a strong password before running the seed command. Never commit real Admin credentials.
-
-### Run the Admin Seed
-
-```bash
-npm run seed:admin
-```
-
-The script validates the Admin seed variables, connects to MongoDB using the existing database configuration, normalizes the email address, and checks for an existing user through the user repository.
-
-### Seed Idempotency
-
-- If the email does not exist, the script creates an active `ADMIN` user.
-- If the email already belongs to an `ADMIN`, the script reports that the account exists and makes no changes, including no password reset.
-- If the email belongs to a `CUSTOMER`, the script refuses to promote or modify that account and exits with a non-zero status.
-- Running the command repeatedly will not create duplicate Admin accounts.
+`.env.example` contains placeholders only. It does not contain real credentials or production secrets.
 
 ## Development
 
@@ -145,10 +181,10 @@ npm run dev
 
 The API is available at `http://localhost:5000` by default, or at the configured `PORT`.
 
-### Health Check
+Health check:
 
-```bash
-curl http://localhost:5000/api/v1/health
+```text
+GET http://localhost:5000/api/v1/health
 ```
 
 Expected response:
@@ -163,9 +199,9 @@ Expected response:
 }
 ```
 
-## Build and Run
+## Build and Production Start
 
-Compile TypeScript to the `dist` directory:
+Compile TypeScript into `dist`:
 
 ```bash
 npm run build
@@ -177,40 +213,54 @@ Run the compiled application:
 npm start
 ```
 
-## API Documentation
+## Admin Seed
 
-Interactive API documentation is served by Swagger UI:
+Public registration always creates a `CUSTOMER`. Admin accounts are created only through the one-off seed script. There is no public Admin registration endpoint, and the application does not seed the database automatically at startup.
 
-- Swagger UI: `http://localhost:5000/api-docs`
-- OpenAPI JSON: `http://localhost:5000/api-docs.json`
+1. Set `ADMIN_SEED_NAME`, `ADMIN_SEED_EMAIL`, and `ADMIN_SEED_PASSWORD` in `.env`.
+2. Run:
 
-Start the backend locally with `npm run dev`, or build and run it with `npm run build` followed by `npm start`, then open the Swagger UI URL. If you changed `PORT`, replace `5000` with the configured port.
+   ```bash
+   npm run seed:admin
+   ```
 
-Swagger UI supports **Try it out** and **Execute**, displays request and response schemas and example payloads, and includes a Bearer JWT authorization scheme.
+The script:
 
-The Swagger server URL is configured as `http://localhost:5000/api/v1`, so operations are executed against the existing API base path.
+- Reads credentials from environment variables.
+- Validates the name, email, password length, and bcrypt UTF-8 byte limit.
+- Hashes the password with bcrypt before storage.
+- Normalizes the email to lowercase.
+- Creates an active `ADMIN` account only when the email does not already exist.
+- Makes no changes when the email already belongs to an `ADMIN`, including no password reset.
+- Refuses to promote or modify an existing `CUSTOMER`.
+- Is idempotent and does not create duplicate accounts.
 
-### Testing Registration and Login in Swagger
+Do not commit real Admin credentials.
 
-1. Expand `POST /auth/register`, click **Try it out**, and execute with a unique email.
-2. Copy `data.tokens.accessToken` from the `201` response.
-3. Click **Authorize**, paste the access token, and authorize.
-4. Expand `POST /auth/login` and execute with the same credentials.
-5. Use `POST /auth/refresh` with `data.tokens.refreshToken` to rotate the token pair.
-6. Use `POST /auth/logout` with the refresh token to revoke the session.
+## Authentication Workflow
 
-Public authentication endpoints do not require an existing access token. The Bearer security scheme is available for protected endpoints added in future modules.
+Registration and login return a short-lived JWT access token and an opaque refresh token.
 
-## Authentication
+- Send the access token as `Authorization: Bearer <accessToken>`.
+- Access tokens are signed with `JWT_ACCESS_SECRET` and expire after `JWT_ACCESS_EXPIRES_IN_SECONDS`.
+- Refresh tokens are 256-bit random values. Only SHA-256 hashes are stored in MongoDB.
+- Refresh tokens expire after `REFRESH_TOKEN_EXPIRES_IN_SECONDS`.
+- Refresh-token rotation invalidates the old token and returns a new pair.
+- Reusing a rotated refresh token revokes that session.
+- Logout revokes the supplied refresh-token session.
+- Access tokens are checked against the current user record, account status, and `tokenVersion`.
+- Deactivating or activating a user increments `tokenVersion` and revokes all of that user's refresh-token sessions.
 
-Registration and login issue both an access token and a refresh token.
+### Authentication Endpoints
 
-- Access tokens are JWTs signed with `JWT_ACCESS_SECRET`. They are sent as `Authorization: Bearer <accessToken>` and expire after `JWT_ACCESS_EXPIRES_IN_SECONDS`.
-- Refresh tokens are opaque 256-bit random values. Only their SHA-256 hashes are stored in MongoDB. They expire after `REFRESH_TOKEN_EXPIRES_IN_SECONDS`.
+| Method | Endpoint                     | Access   | Description                                |
+| ------ | ---------------------------- | -------- | ------------------------------------------ |
+| `POST` | `/api/v1/auth/register`      | Public   | Register a customer and issue a token pair |
+| `POST` | `/api/v1/auth/login`         | Public   | Authenticate and issue a token pair        |
+| `POST` | `/api/v1/auth/refresh`       | Public   | Rotate a refresh token                     |
+| `POST` | `/api/v1/auth/logout`        | Public   | Revoke a refresh-token session             |
 
-### Register
-
-`POST /api/v1/auth/register`
+Registration request:
 
 ```json
 {
@@ -220,7 +270,7 @@ Registration and login issue both an access token and a refresh token.
 }
 ```
 
-Returns `201 Created` with the user and a token pair:
+Authentication responses use this shape:
 
 ```json
 {
@@ -244,72 +294,175 @@ Returns `201 Created` with the user and a token pair:
 }
 ```
 
-### Login
+## API Documentation
 
-`POST /api/v1/auth/login`
+Swagger UI and the generated OpenAPI JSON are served by the application:
+
+- Swagger UI: `http://localhost:5000/api-docs`
+- OpenAPI JSON: `http://localhost:5000/api-docs.json`
+
+The OpenAPI server base URL is `http://localhost:5000/api/v1`. If `PORT` is changed, use the configured port. The specification includes Bearer JWT security, reusable schemas, request parameters, success responses, and error responses.
+
+The specification is generated from the route-level `@openapi` comments and the shared definitions in `src/config/swagger.ts`. There is no separately maintained OpenAPI document.
+
+## User Management Endpoints
+
+| Method  | Endpoint                        | Access   | Description                                          |
+| ------- | ------------------------------- | -------- | ---------------------------------------------------- |
+| `GET`   | `/api/v1/users/profile`         | Customer/Admin | Get the authenticated user's profile           |
+| `PATCH` | `/api/v1/users/profile`         | Customer/Admin | Update the authenticated user's full name      |
+| `GET`   | `/api/v1/users`                 | Admin    | Paginated user listing with search and filters       |
+| `PATCH` | `/api/v1/users/{id}/status`     | Admin    | Activate or deactivate a user                        |
+
+`GET /api/v1/users` supports `search`, `role`, `isActive`, `page`, and `limit`. User responses never include `passwordHash`.
+
+## Category Endpoints
+
+| Method   | Endpoint                         | Access | Description                                      |
+| -------- | -------------------------------- | ------ | ------------------------------------------------ |
+| `GET`    | `/api/v1/categories`             | Public | List categories                                  |
+| `GET`    | `/api/v1/categories/tree`        | Public | Get the complete nested category tree            |
+| `GET`    | `/api/v1/categories/{id}`        | Public | Get a category by ID                             |
+| `POST`   | `/api/v1/categories`             | Admin  | Create a root or child category                  |
+| `PATCH`  | `/api/v1/categories/{id}`        | Admin  | Rename, move, or move to root                    |
+| `DELETE` | `/api/v1/categories/{id}`        | Admin  | Delete a category when it is safe to do so        |
+
+Categories support unlimited nesting through `parentId` and an `ancestors` array. The server owns hierarchy calculations. Moving a category updates descendant ancestors. Self-parenting, missing parents, and moves under descendants are rejected.
+
+A category cannot be deleted while it has child categories or while any product references it, including inactive products.
+
+## Product Endpoints
+
+| Method   | Endpoint                          | Access | Description                                      |
+| -------- | --------------------------------- | ------ | ------------------------------------------------ |
+| `GET`    | `/api/v1/products`                | Public | List active products with search and filters     |
+| `GET`    | `/api/v1/products/{id}`           | Public | Get an active product by ID                      |
+| `POST`   | `/api/v1/admin/products`          | Admin  | Create a product                                 |
+| `GET`    | `/api/v1/admin/products`          | Admin  | List all products, including inactive products   |
+| `GET`    | `/api/v1/admin/products/{id}`     | Admin  | Get any product by ID                            |
+| `PATCH`  | `/api/v1/admin/products/{id}`     | Admin  | Update a product                                 |
+| `DELETE` | `/api/v1/admin/products/{id}`     | Admin  | Soft-delete a product by marking it `INACTIVE`   |
+
+Product fields are `name`, `sku`, `description`, `price`, `salePrice`, `stock`, `category`, and `status`. SKUs are unique and normalized to uppercase. Prices are in INR and are stored with at most two decimal places. The effective selling price is `salePrice` when present, otherwise `price`.
+
+Public product listing supports:
+
+- `search`: case-insensitive match on name, description, or SKU
+- `categoryId`: includes the selected category and all descendant categories
+- `minPrice` and `maxPrice`: filters by effective selling price
+- `sortBy`: `createdAt`, `name`, or `price`
+- `sortOrder`: `asc` or `desc`
+- `page` and `limit`
+
+Only `ACTIVE` products are exposed through public endpoints. Soft deletion keeps the MongoDB document and historical order references.
+
+## Order Endpoints
+
+| Method  | Endpoint                               | Access   | Description                                      |
+| ------- | -------------------------------------- | -------- | ------------------------------------------------ |
+| `POST`  | `/api/v1/orders`                       | Customer | Create an order from product IDs and quantities  |
+| `GET`   | `/api/v1/orders`                       | Customer | Paginated order history for the authenticated user |
+| `GET`   | `/api/v1/orders/{id}`                  | Customer | Get an authenticated customer's own order        |
+| `GET`   | `/api/v1/admin/orders`                 | Admin    | List all orders with filters                     |
+| `GET`   | `/api/v1/admin/orders/{id}`            | Admin    | Get any order by ID                              |
+| `PATCH` | `/api/v1/admin/orders/{id}/status`     | Admin    | Transition an order status or cancel an order    |
+
+Customer checkout request:
 
 ```json
 {
-  "email": "jane@example.com",
-  "password": "StrongPass123"
-}
-```
-
-Returns `200 OK` with the same user and token-pair structure as registration.
-
-### Refresh Token Rotation
-
-`POST /api/v1/auth/refresh`
-
-```json
-{
-  "refreshToken": "<refresh-token>"
-}
-```
-
-The refresh token is rotated atomically. The old token is invalidated and a new token pair is returned:
-
-```json
-{
-  "success": true,
-  "message": "Token refreshed successfully",
-  "data": {
-    "tokens": {
-      "accessToken": "<new-access-token>",
-      "refreshToken": "<new-refresh-token>",
-      "tokenType": "Bearer",
-      "expiresIn": 900,
-      "refreshExpiresIn": 604800
+  "items": [
+    {
+      "productId": "665f1b2c9a1b2c3d4e5f6795",
+      "quantity": 2
     }
-  }
+  ]
 }
 ```
 
-Reusing a previously rotated token revokes the session and returns `401 Unauthorized` with error code `REFRESH_TOKEN_REUSE_DETECTED`.
+Checkout rules:
 
-### Logout
+- Customer identity comes from the authenticated JWT, never from the request body.
+- Duplicate product IDs are aggregated before stock reservation.
+- Product prices, names, and SKUs are read by the backend.
+- All calculations use integer paise and return INR values.
+- Orders start as `PENDING` with inventory status `RESERVED`.
+- Stock is deducted with one conditional atomic update per product.
+- If a later step fails, earlier reservations are compensated.
+- Customer responses omit `customerId` and `inventoryStatus`.
+- Customer order detail requests never expose another customer's order.
+- Admin responses include `customerId` and `inventoryStatus`.
 
-`POST /api/v1/auth/logout`
+### Order Status Transitions
 
-```json
-{
-  "refreshToken": "<refresh-token>"
-}
+| Current status | Allowed next statuses          |
+| -------------- | ------------------------------ |
+| `PENDING`      | `CONFIRMED`, `CANCELLED`       |
+| `CONFIRMED`    | `PROCESSING`, `CANCELLED`      |
+| `PROCESSING`   | `SHIPPED`, `CANCELLED`         |
+| `SHIPPED`      | `DELIVERED`                    |
+| `DELIVERED`    | None                           |
+| `CANCELLED`    | None                           |
+
+Cancellation is allowed only from `PENDING`, `CONFIRMED`, or `PROCESSING`. Cancellation marks the order `CANCELLED` with inventory status `RESTORING`, restores each product using an idempotent operation key, then marks inventory `RELEASED`. A retry is safe when restoration is incomplete. See [`docs/order-inventory-design.md`](docs/order-inventory-design.md) for the full design.
+
+## Database Indexes
+
+The models define the following query-driven indexes:
+
+- `User`: unique `email`; compound `role`, `isActive`, `createdAt`.
+- `RefreshToken`: unique `tokenHash`; `userId` with `revokedAt`; `previousTokenHashes`; TTL index on `expiresAt`.
+- `Category`: `parentId`; `ancestors`.
+- `Product`: unique `sku`; compound `category`, `status`; `createdAt`.
+- `Order`: compound `customerId`, `createdAt`; compound `status`, `createdAt`.
+
+## Automated Testing
+
+The project uses the Node.js built-in test runner through `tsx`. Tests use in-memory fake repositories and do not connect to the development database or perform HTTP requests.
+
+Run the checkout tests:
+
+```bash
+npm run test:orders
 ```
 
-Revokes the refresh-token session. Logout is idempotent. Existing access tokens remain valid until they expire, but the revoked refresh token can no longer be used.
+Run the order management, transition, and cancellation tests:
 
-```json
-{
-  "success": true,
-  "message": "Logged out successfully",
-  "data": {}
-}
+```bash
+npm run test:order-management
 ```
 
-### Error Response Format
+Other available scripts:
 
-All errors, including validation failures, unknown routes, and unexpected failures, use a consistent response structure:
+| Script               | Description                                      |
+| -------------------- | ------------------------------------------------ |
+| `npm run dev`         | Run the application in watch mode using tsx      |
+| `npm run build`       | Compile TypeScript into `dist`                   |
+| `npm start`           | Run the compiled application                     |
+| `npm run typecheck`   | Run TypeScript checks without emitting           |
+| `npm run seed:admin`  | Create the initial Admin account from seed vars  |
+
+The tests cover duplicate product aggregation, price manipulation protection, atomic stock deduction query shape, compensation, order status transitions, customer ownership, admin authorization rules at the service boundary, idempotent cancellation, partial restoration retry, and money arithmetic. They do not claim live MongoDB integration or server-side transaction testing.
+
+## Standalone MongoDB and Inventory Limitations
+
+The project intentionally uses the existing standalone MongoDB configuration and does not use multi-document transactions.
+
+- Conditional atomic stock deduction prevents overselling for a single product document.
+- Multi-product checkout is not an all-or-nothing transaction.
+- A process crash after some stock deductions can leave stock reserved without a persisted order.
+- Checkout compensation restores earlier reservations when a later step fails.
+- Cancellation restoration is idempotent through per-order, per-product operation keys.
+- An incomplete cancellation remains `CANCELLED` with inventory status `RESTORING` and can be retried safely.
+- `stockRestorationKeys` grows for the lifetime of a product; high-volume deployments should move idempotency records to a dedicated collection.
+- Stock restoration and final order release are separate document updates; a crash between them leaves the order retryable in `RESTORING`.
+- Products removed from the database cannot be restored automatically and require operational intervention.
+
+The application never claims all-or-nothing multi-document atomicity.
+
+## Error Response Format
+
+All errors use a consistent response structure:
 
 ```json
 {
@@ -321,62 +474,7 @@ All errors, including validation failures, unknown routes, and unexpected failur
 }
 ```
 
-## Available API Endpoints
-
-| Method | Endpoint                    | Description                                      |
-| ------ | --------------------------- | ------------------------------------------------ |
-| `GET`  | `/api/v1/health`            | Service health check                             |
-| `POST` | `/api/v1/auth/register`     | Register a customer and issue a token pair       |
-| `POST` | `/api/v1/auth/login`        | Authenticate and issue a token pair              |
-| `POST` | `/api/v1/auth/refresh`      | Rotate a refresh token and issue a new token pair |
-| `POST` | `/api/v1/auth/logout`       | Revoke a refresh-token session                   |
-
-## Available Scripts
-
-| Script              | Description                                   |
-| ------------------- | --------------------------------------------- |
-| `npm run dev`        | Run the application in watch mode using tsx   |
-| `npm run build`      | Compile TypeScript into the `dist` directory  |
-| `npm start`          | Run the compiled application                  |
-| `npm run typecheck`  | Run TypeScript type checking without emitting |
-| `npm run seed:admin` | Create the initial Admin account from the seed env vars |
-
-## Project Structure
-
-```text
-src/
-  app.ts
-  server.ts
-  config/
-    database.ts
-    env.ts
-    swagger.ts
-  shared/
-    errors/
-    middleware/
-    types/
-    utils/
-  scripts/
-    seed-admin.ts
-  modules/
-    auth/
-      auth.controller.ts
-      auth.routes.ts
-      auth.service.ts
-      auth.types.ts
-      auth.validation.ts
-      refresh-token.model.ts
-      refresh-token.repository.ts
-      refresh-token.service.ts
-      token.service.ts
-    health/
-      health.controller.ts
-      health.routes.ts
-    users/
-      user.model.ts
-      user.repository.ts
-      user.types.ts
-```
+Validation failures return `422 Unprocessable Entity`. Authentication failures return `401`, authorization failures return `403`, missing resources return `404`, and invalid state or status conflicts return `409`.
 
 ## License
 

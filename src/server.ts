@@ -6,6 +6,29 @@ import { env } from './config/env';
 let httpServer: Server | null = null;
 let isShuttingDown = false;
 
+const logStartupBanner = (): void => {
+  const baseUrl = `http://localhost:${env.PORT}`;
+
+  console.log(
+    [
+      '==================================================',
+      '       E-COMMERCE REST API',
+      '==================================================',
+      '',
+      'Server Status : Running',
+      `Environment   : ${env.NODE_ENV}`,
+      '',
+      `API Base URL  : ${baseUrl}`,
+      `Health Check  : ${baseUrl}/api/v1/health`,
+      '',
+      `Swagger UI    : ${baseUrl}/api-docs`,
+      `OpenAPI JSON  : ${baseUrl}/api-docs.json`,
+      '',
+      '==================================================',
+    ].join('\n')
+  );
+};
+
 const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
   if (isShuttingDown) {
     return;
@@ -50,7 +73,7 @@ const startServer = async (): Promise<void> => {
     await connectDatabase();
 
     httpServer = app.listen(env.PORT, () => {
-      console.log(`Server is running on port ${env.PORT}`);
+      logStartupBanner();
     });
 
     process.on('SIGINT', () => void shutdown('SIGINT'));
