@@ -4,6 +4,44 @@ A modular, layered REST API for an e-commerce platform built with Node.js, TypeS
 
 This repository does not include Docker, deployment, or hosting configuration.
 
+## Quick Start
+
+1. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+2. Create your local environment file.
+
+   Windows PowerShell:
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+   macOS/Linux:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Ensure your existing MongoDB instance is running, then set `MONGODB_URI` and a `JWT_ACCESS_SECRET` of at least 32 characters in `.env`. For a local standalone MongoDB instance, the example URI is:
+
+   ```dotenv
+   MONGODB_URI=mongodb://127.0.0.1:27017/ecommerce-rest-api
+   ```
+
+4. Start the development server:
+
+   ```bash
+   npm run dev
+   ```
+
+5. Open the locally served Swagger UI at [http://localhost:5000/api-docs](http://localhost:5000/api-docs). If `PORT` is changed, use the configured port instead of `5000`.
+
+See [Local MongoDB Setup](#local-mongodb-setup) and [Environment Configuration](#environment-configuration) for detailed setup information.
+
 ## Technology Stack
 
 - Node.js with npm
@@ -95,9 +133,9 @@ docs/
 
 - Node.js v20 or later
 - npm
-- A running MongoDB instance
+- An existing MongoDB instance that is running
 
-The project is intended for an existing standalone local MongoDB deployment. It does not configure or require a replica set, and it does not use multi-document transactions.
+The application requires an existing MongoDB instance to start. Standalone MongoDB is supported; a replica set is not required. The application does not use multi-document transactions.
 
 ## Installation
 
@@ -125,7 +163,9 @@ Never commit your real `.env` file. It is excluded by `.gitignore`.
 
 ## Local MongoDB Setup
 
-Start MongoDB locally. The default local port is `27017`.
+The application requires an existing MongoDB instance. Start your local MongoDB instance before starting the API. The default local port is `27017`.
+
+A standalone MongoDB deployment is supported; a replica set is not required, and the application does not use multi-document transactions.
 
 Set `MONGODB_URI` in `.env`, for example:
 
@@ -296,14 +336,16 @@ Authentication responses use this shape:
 
 ## API Documentation
 
-Swagger UI and the generated OpenAPI JSON are served by the application:
+Swagger UI and the generated OpenAPI JSON are served locally by the application:
 
-- Swagger UI: `http://localhost:5000/api-docs`
-- OpenAPI JSON: `http://localhost:5000/api-docs.json`
+- [Swagger UI](http://localhost:5000/api-docs)
+- [OpenAPI JSON](http://localhost:5000/api-docs.json)
 
-The OpenAPI server base URL is `http://localhost:5000/api/v1`. If `PORT` is changed, use the configured port. The specification includes Bearer JWT security, reusable schemas, request parameters, success responses, and error responses.
+These URLs assume the default `PORT=5000`. If `PORT` is changed, use the configured port. Start the application locally to access the interactive Swagger UI and generated OpenAPI JSON specification.
 
-The specification is generated from the route-level `@openapi` comments and the shared definitions in `src/config/swagger.ts`. There is no separately maintained OpenAPI document.
+The OpenAPI server base URL is `http://localhost:5000/api/v1`. The specification includes Bearer JWT security, reusable schemas, request parameters, success responses, and error responses.
+
+The specification is generated dynamically from the route-level `@openapi` comments and the shared Swagger definitions in `src/config/swagger.ts`. There is no separately maintained OpenAPI document.
 
 ## User Management Endpoints
 
@@ -420,17 +462,7 @@ The models define the following query-driven indexes:
 
 The project uses the Node.js built-in test runner through `tsx`. Tests use in-memory fake repositories and do not connect to the development database or perform HTTP requests.
 
-Run the checkout tests:
-
-```bash
-npm run test:orders
-```
-
-Run the order management, transition, and cancellation tests:
-
-```bash
-npm run test:order-management
-```
+The checkout suite covers `tests/orders/order.service.test.ts`. The order management suite covers `tests/orders/order.management.test.ts`, including order transitions and cancellation behavior. Run both suites using the commands in [Verification](#verification).
 
 Other available scripts:
 
@@ -444,9 +476,22 @@ Other available scripts:
 
 The tests cover duplicate product aggregation, price manipulation protection, atomic stock deduction query shape, compensation, order status transitions, customer ownership, admin authorization rules at the service boundary, idempotent cancellation, partial restoration retry, and money arithmetic. They do not claim live MongoDB integration or server-side transaction testing.
 
+## Verification
+
+Run these commands to verify TypeScript correctness, compilation, and the available automated tests:
+
+```bash
+npm run typecheck
+npm run build
+npm run test:orders
+npm run test:order-management
+```
+
+`npm run typecheck` validates TypeScript without emitting files, and `npm run build` compiles the application into `dist`. The test commands run the checkout and order-management suites described above.
+
 ## Standalone MongoDB and Inventory Limitations
 
-The project intentionally uses the existing standalone MongoDB configuration and does not use multi-document transactions.
+The application requires an existing MongoDB instance. Standalone MongoDB is supported, and a replica set is not required. The project intentionally uses the existing standalone MongoDB configuration and does not use multi-document transactions.
 
 - Conditional atomic stock deduction prevents overselling for a single product document.
 - Multi-product checkout is not an all-or-nothing transaction.
