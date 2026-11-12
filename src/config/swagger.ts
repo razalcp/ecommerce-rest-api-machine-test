@@ -14,7 +14,7 @@ const definition: SwaggerDefinition = {
   info: {
     title: 'E-commerce REST API',
     description:
-      'A modular, layered REST API for an e-commerce platform. It provides health checks, customer registration and login, JWT access tokens, opaque refresh tokens, refresh-token rotation, logout, authenticated profile access, admin user management, public category browsing, admin category management, public product browsing, and admin product management.',
+      'A modular, layered REST API for an e-commerce platform. It provides health checks, customer registration and login, JWT access tokens, opaque refresh tokens, refresh-token rotation, logout, authenticated profile access, admin user management, public category browsing, admin category management, public product browsing, admin product management, and customer order creation with atomic inventory reservation.',
     version: '1.0.0',
   },
   servers: [
@@ -43,6 +43,10 @@ const definition: SwaggerDefinition = {
     {
       name: 'Products',
       description: 'Public product browsing and admin product management',
+    },
+    {
+      name: 'Orders',
+      description: 'Customer order creation and inventory reservation',
     },
   ],
   components: {
@@ -915,6 +919,171 @@ const definition: SwaggerDefinition = {
             type: 'string',
             enum: ['ACTIVE', 'INACTIVE'],
             example: 'INACTIVE',
+          },
+        },
+      },
+      CreateOrderRequest: {
+        type: 'object',
+        required: ['items'],
+        additionalProperties: false,
+        properties: {
+          items: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 50,
+            description:
+              'Product IDs and quantities only. Duplicate product IDs are aggregated by the server before stock reservation.',
+            items: {
+              type: 'object',
+              required: ['productId', 'quantity'],
+              additionalProperties: false,
+              properties: {
+                productId: {
+                  type: 'string',
+                  pattern: '^[a-fA-F0-9]{24}$',
+                  description: 'Product MongoDB ObjectId.',
+                  example: '665f1b2c9a1b2c3d4e5f6795',
+                },
+                quantity: {
+                  type: 'integer',
+                  minimum: 1,
+                  maximum: 1000,
+                  description:
+                    'Positive quantity. The aggregated quantity per product must not exceed 1000.',
+                  example: 2,
+                },
+              },
+            },
+          },
+        },
+      },
+      OrderItemSnapshot: {
+        type: 'object',
+        required: [
+          'productId',
+          'name',
+          'sku',
+          'quantity',
+          'unitPrice',
+          'lineTotal',
+        ],
+        properties: {
+          productId: {
+            type: 'string',
+            pattern: '^[a-fA-F0-9]{24}$',
+            example: '665f1b2c9a1b2c3d4e5f6795',
+          },
+          name: {
+            type: 'string',
+            description: 'Product name captured when the order was created.',
+            example: 'Samsung Galaxy S24',
+          },
+          sku: {
+            type: 'string',
+            description: 'Product SKU captured when the order was created.',
+            example: 'SAMSUNG-S24',
+          },
+          quantity: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 1000,
+            example: 2,
+          },
+          unitPrice: {
+            type: 'number',
+            format: 'double',
+            description:
+              'Effective selling price in INR: salePrice when present, otherwise price. Calculated by the server.',
+            example: 74999.99,
+          },
+          lineTotal: {
+            type: 'number',
+            format: 'double',
+            description: 'Quantity multiplied by unitPrice, in INR.',
+            example: 149999.98,
+          },
+        },
+      },
+      Order: {
+        type: 'object',
+        required: [
+          'id',
+          'items',
+          'subtotal',
+          'total',
+          'currency',
+          'status',
+          'createdAt',
+        ],
+        properties: {
+          id: {
+            type: 'string',
+            pattern: '^[a-fA-F0-9]{24}$',
+            example: '665f1b2c9a1b2c3d4e5f6800',
+          },
+          items: {
+            type: 'array',
+            items: {
+              $ref: '#/components/schemas/OrderItemSnapshot',
+            },
+          },
+          subtotal: {
+            type: 'number',
+            format: 'double',
+            description: 'Sum of line totals in INR, calculated by the server.',
+            example: 149999.98,
+          },
+          total: {
+            type: 'number',
+            format: 'double',
+            description:
+              'Order total in INR. No shipping, tax, or discount is applied in this phase.',
+            example: 149999.98,
+          },
+          currency: {
+            type: 'string',
+            enum: ['INR'],
+            example: 'INR',
+          },
+          status: {
+            type: 'string',
+            enum: [
+              'PENDING',
+              'CONFIRMED',
+              'PROCESSING',
+              'SHIPPED',
+              'DELIVERED',
+              'CANCELLED',
+            ],
+            example: 'PENDING',
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-11-12T10:00:00.000Z',
+          },
+        },
+      },
+      OrderResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Order created successfully',
+          },
+          data: {
+            type: 'object',
+            required: ['order'],
+            properties: {
+              order: {
+                $ref: '#/components/schemas/Order',
+              },
+            },
           },
         },
       },

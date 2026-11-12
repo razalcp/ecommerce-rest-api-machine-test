@@ -34,7 +34,7 @@ A modular, layered REST API for an e-commerce platform built with Node.js, TypeS
 2. Create your local environment file from the example:
 
    ```bash
-   cp .env.example .env
+  .env.example .env
    ```
 
    On Windows PowerShell:

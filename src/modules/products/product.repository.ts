@@ -192,6 +192,45 @@ export class MongooseProductRepository implements ProductRepository {
     }).exec();
   }
 
+  public async findActiveByIds(productIds: ProductId[]): Promise<ProductDocument[]> {
+    return ProductModel.find({
+      _id: { $in: productIds },
+      status: PRODUCT_STATUSES.ACTIVE,
+    }).exec();
+  }
+
+  public async reserveStock(
+    productId: ProductId,
+    quantity: number
+  ): Promise<ProductDocument | null> {
+    return ProductModel.findOneAndUpdate(
+      {
+        _id: productId,
+        status: PRODUCT_STATUSES.ACTIVE,
+        stock: { $gte: quantity },
+      },
+      { $inc: { stock: -quantity } },
+      { returnDocument: 'after', runValidators: true }
+    ).exec();
+  }
+
+  public async restoreStock(
+    productId: ProductId,
+    quantity: number
+  ): Promise<ProductDocument> {
+    const product = await ProductModel.findByIdAndUpdate(
+      productId,
+      { $inc: { stock: quantity } },
+      { returnDocument: 'after', runValidators: true }
+    ).exec();
+
+    if (!product) {
+      throw new Error(`Failed to restore stock for product ${productId.toString()}`);
+    }
+
+    return product;
+  }
+
   public async existsByCategoryId(categoryId: ProductId): Promise<boolean> {
     const product = await ProductModel.exists({ category: categoryId });
     return product !== null;

@@ -177,5 +177,11 @@ export interface ProductRepository {
     sorting: ProductSorting
   ): Promise<PublicPaginatedProductResult>;
   findActiveById(productId: ProductId): Promise<ProductDocument | null>;
+  findActiveByIds(productIds: ProductId[]): Promise<ProductDocument[]>;
+  reserveStock(
+    productId: ProductId,
+    quantity: number
+  ): Promise<ProductDocument | null>;
+  restoreStock(productId: ProductId, quantity: number): Promise<ProductDocument>;
   existsByCategoryId(categoryId: ProductId): Promise<boolean>;
 }
