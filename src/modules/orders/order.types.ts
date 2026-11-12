@@ -12,8 +12,29 @@ export const ORDER_STATUSES = {
 
 export type OrderStatus = (typeof ORDER_STATUSES)[keyof typeof ORDER_STATUSES];
 
+export const ORDER_STATUS_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
+  PENDING: [ORDER_STATUSES.CONFIRMED, ORDER_STATUSES.CANCELLED],
+  CONFIRMED: [ORDER_STATUSES.PROCESSING, ORDER_STATUSES.CANCELLED],
+  PROCESSING: [ORDER_STATUSES.SHIPPED, ORDER_STATUSES.CANCELLED],
+  SHIPPED: [ORDER_STATUSES.DELIVERED],
+  DELIVERED: [],
+  CANCELLED: [],
+};
+
+export const CANCELLABLE_ORDER_STATUSES: readonly OrderStatus[] = [
+  ORDER_STATUSES.PENDING,
+  ORDER_STATUSES.CONFIRMED,
+  ORDER_STATUSES.PROCESSING,
+];
+
+export const isOrderStatusTransitionAllowed = (
+  currentStatus: OrderStatus,
+  nextStatus: OrderStatus
+): boolean => ORDER_STATUS_TRANSITIONS[currentStatus].includes(nextStatus);
+
 export const INVENTORY_STATUSES = {
   RESERVED: 'RESERVED',
+  RESTORING: 'RESTORING',
   RELEASED: 'RELEASED',
 } as const;
 
@@ -82,6 +103,31 @@ export interface CompensationResult {
   restored: boolean;
 }
 
+export interface OrderPagination {
+  page: number;
+  limit: number;
+}
+
+export interface OrderAdminFilters {
+  status?: OrderStatus;
+  customerId?: string;
+}
+
+export type OrderAdminListQuery = OrderAdminFilters & OrderPagination;
+export type OrderCustomerListQuery = OrderPagination;
+
+export interface UpdateOrderStatusRequest {
+  status: OrderStatus;
+}
+
+export interface PaginatedOrderResult<TOrder = OrderDocument> {
+  orders: TOrder[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export interface OrderRepository {
   create(orderData: CreateOrderData): Promise<OrderDocument>;
   findById(orderId: OrderId): Promise<OrderDocument | null>;
@@ -89,11 +135,29 @@ export interface OrderRepository {
     orderId: OrderId,
     customerId: OrderCustomerId
   ): Promise<OrderDocument | null>;
+  findCustomerOrders(
+    customerId: OrderCustomerId,
+    pagination: OrderPagination
+  ): Promise<PaginatedOrderResult>;
+  findAllAdminOrders(
+    filters: OrderAdminFilters,
+    pagination: OrderPagination
+  ): Promise<PaginatedOrderResult>;
+  updateStatusIfCurrent(
+    orderId: OrderId,
+    expectedStatus: OrderStatus,
+    nextStatus: OrderStatus
+  ): Promise<OrderDocument | null>;
+  beginCancellation(
+    orderId: OrderId,
+    expectedStatus: OrderStatus
+  ): Promise<OrderDocument | null>;
+  completeInventoryRelease(orderId: OrderId): Promise<OrderDocument | null>;
 }
 
 export type OrderProductRepository = Pick<
   ProductRepository,
-  'findActiveByIds' | 'reserveStock' | 'restoreStock'
+  'findActiveByIds' | 'reserveStock' | 'restoreStock' | 'restoreStockOnce'
 >;
 
 export interface SafeOrderItemResponse {
@@ -113,4 +177,27 @@ export interface SafeOrderResponse {
   currency: OrderCurrency;
   status: OrderStatus;
   createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SafeAdminOrderResponse extends SafeOrderResponse {
+  customerId: string;
+  inventoryStatus: InventoryStatus;
+}
+
+export interface OrderPaginationMetadata {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PaginatedSafeOrderResponse {
+  orders: SafeOrderResponse[];
+  pagination: OrderPaginationMetadata;
+}
+
+export interface PaginatedSafeAdminOrderResponse {
+  orders: SafeAdminOrderResponse[];
+  pagination: OrderPaginationMetadata;
 }

@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test:orders": "tsx --test tests/orders/order.service.test.ts",
+    "test:order-management": "tsx --test tests/orders/order.management.test.ts",
     "seed:admin": "tsx src/scripts/seed-admin.ts"
   },
   "repository": {

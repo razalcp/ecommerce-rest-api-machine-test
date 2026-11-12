@@ -12,19 +12,29 @@ import {
   PRODUCT_STATUSES,
   ProductDocument,
   ProductId,
+  STOCK_RESTORATION_STATUSES,
 } from '../products/product.types';
 import { orderRepository } from './order.repository';
 import {
   CompensationResult,
   CreateOrderData,
   INVENTORY_STATUSES,
+  isOrderStatusTransitionAllowed,
+  OrderAdminListQuery,
+  OrderCustomerListQuery,
   OrderDocument,
   OrderItem,
   OrderItemInput,
+  OrderPaginationMetadata,
   ORDER_CURRENCIES,
   ORDER_STATUSES,
   OrderProductRepository,
   OrderRepository,
+  OrderStatus,
+  PaginatedOrderResult,
+  PaginatedSafeAdminOrderResponse,
+  PaginatedSafeOrderResponse,
+  SafeAdminOrderResponse,
   SafeOrderResponse,
   StockReservation,
 } from './order.types';
@@ -39,6 +49,9 @@ const INVALID_ITEMS_MESSAGE = 'Order items are invalid';
 const CHECKOUT_FAILED_MESSAGE = 'Order checkout failed';
 const COMPENSATION_FAILED_MESSAGE = 'Order checkout could not be completed safely';
 const PRICING_UNAVAILABLE_MESSAGE = 'Product pricing is unavailable';
+const ORDER_NOT_FOUND_MESSAGE = 'Order not found';
+const INVENTORY_RESTORATION_FAILED_MESSAGE =
+  'Order was cancelled, but inventory restoration is incomplete. Please retry.';
 
 interface NormalizedOrderItem {
   productId: Types.ObjectId;
@@ -54,6 +67,11 @@ interface OrderSummary {
   items: OrderItem[];
   subtotalPaise: number;
   totalPaise: number;
+}
+
+interface RestorationItem {
+  productId: Types.ObjectId;
+  quantity: number;
 }
 
 export interface OrderServiceDependencies {
@@ -77,6 +95,40 @@ const insufficientStockError = (): AppError =>
 
 const invalidItemsError = (message: string = INVALID_ITEMS_MESSAGE): AppError =>
   new AppError(message, HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_ERROR');
+
+const orderNotFoundError = (): AppError =>
+  new AppError(ORDER_NOT_FOUND_MESSAGE, HttpStatus.NOT_FOUND, 'ORDER_NOT_FOUND');
+
+const invalidOrderStatusTransitionError = (
+  currentStatus: OrderStatus,
+  nextStatus: OrderStatus
+): AppError =>
+  new AppError(
+    `Cannot change order status from ${currentStatus} to ${nextStatus}`,
+    HttpStatus.CONFLICT,
+    'INVALID_ORDER_STATUS_TRANSITION'
+  );
+
+const orderStatusConflictError = (): AppError =>
+  new AppError(
+    'Order status changed concurrently. Please retry.',
+    HttpStatus.CONFLICT,
+    'ORDER_STATUS_CONFLICT'
+  );
+
+const invalidInventoryStateError = (): AppError =>
+  new AppError(
+    'Order inventory state cannot be cancelled',
+    HttpStatus.CONFLICT,
+    'INVALID_INVENTORY_STATE'
+  );
+
+const inventoryRestorationFailedError = (): AppError =>
+  new AppError(
+    INVENTORY_RESTORATION_FAILED_MESSAGE,
+    HttpStatus.INTERNAL_SERVER_ERROR,
+    'INVENTORY_RESTORATION_FAILED'
+  );
 
 const toObjectIdString = (productId: ProductId): string => productId.toString();
 
@@ -197,7 +249,50 @@ const toSafeOrderResponse = (order: OrderDocument): SafeOrderResponse => ({
   currency: order.currency,
   status: order.status,
   createdAt: order.createdAt,
+  updatedAt: order.updatedAt,
 });
+
+const toSafeAdminOrderResponse = (
+  order: OrderDocument
+): SafeAdminOrderResponse => ({
+  ...toSafeOrderResponse(order),
+  customerId: order.customerId.toString(),
+  inventoryStatus: order.inventoryStatus,
+});
+
+const toPaginationMetadata = (
+  result: PaginatedOrderResult
+): OrderPaginationMetadata => ({
+  page: result.page,
+  limit: result.limit,
+  total: result.total,
+  totalPages: result.totalPages,
+});
+
+const toRestorationItems = (items: OrderItem[]): RestorationItem[] => {
+  const quantitiesByProduct = new Map<string, RestorationItem>();
+
+  for (const item of items) {
+    const productId = item.productId.toHexString();
+    const existing = quantitiesByProduct.get(productId);
+
+    if (existing) {
+      existing.quantity += item.quantity;
+    } else {
+      quantitiesByProduct.set(productId, {
+        productId: item.productId,
+        quantity: item.quantity,
+      });
+    }
+  }
+
+  return [...quantitiesByProduct.values()];
+};
+
+const toCancellationOperationKey = (
+  orderId: string,
+  productId: string
+): string => `order-cancel:${orderId}:${productId}`;
 
 export class OrderService {
   constructor(private readonly dependencies: OrderServiceDependencies) {}
@@ -266,6 +361,264 @@ export class OrderService {
     }
 
     return toSafeOrderResponse(order);
+  }
+
+  public async getCustomerOrders(
+    customerId: string,
+    query: OrderCustomerListQuery
+  ): Promise<PaginatedSafeOrderResponse> {
+    if (!OBJECT_ID_PATTERN.test(customerId)) {
+      throw new AppError(
+        'Authentication required',
+        HttpStatus.UNAUTHORIZED,
+        'AUTHENTICATION_REQUIRED'
+      );
+    }
+
+    const result = await this.dependencies.orderRepository.findCustomerOrders(
+      customerId,
+      { page: query.page, limit: query.limit }
+    );
+
+    return {
+      orders: result.orders.map(toSafeOrderResponse),
+      pagination: toPaginationMetadata(result),
+    };
+  }
+
+  public async getCustomerOrderById(
+    customerId: string,
+    orderId: string
+  ): Promise<SafeOrderResponse> {
+    if (!OBJECT_ID_PATTERN.test(customerId)) {
+      throw new AppError(
+        'Authentication required',
+        HttpStatus.UNAUTHORIZED,
+        'AUTHENTICATION_REQUIRED'
+      );
+    }
+
+    const order = await this.dependencies.orderRepository.findByIdAndCustomerId(
+      orderId,
+      customerId
+    );
+
+    if (!order) {
+      throw orderNotFoundError();
+    }
+
+    return toSafeOrderResponse(order);
+  }
+
+  public async getAdminOrders(
+    query: OrderAdminListQuery
+  ): Promise<PaginatedSafeAdminOrderResponse> {
+    const result = await this.dependencies.orderRepository.findAllAdminOrders(
+      {
+        status: query.status,
+        customerId: query.customerId,
+      },
+      { page: query.page, limit: query.limit }
+    );
+
+    return {
+      orders: result.orders.map(toSafeAdminOrderResponse),
+      pagination: toPaginationMetadata(result),
+    };
+  }
+
+  public async getAdminOrderById(orderId: string): Promise<SafeAdminOrderResponse> {
+    const order = await this.findOrderOrThrow(orderId);
+    return toSafeAdminOrderResponse(order);
+  }
+
+  public async updateOrderStatus(
+    orderId: string,
+    nextStatus: OrderStatus
+  ): Promise<SafeAdminOrderResponse> {
+    const order = await this.findOrderOrThrow(orderId);
+
+    if (nextStatus === ORDER_STATUSES.CANCELLED) {
+      if (order.status === ORDER_STATUSES.CANCELLED) {
+        return this.cancelOrder(orderId);
+      }
+
+      if (!isOrderStatusTransitionAllowed(order.status, nextStatus)) {
+        throw invalidOrderStatusTransitionError(order.status, nextStatus);
+      }
+
+      return this.cancelOrder(orderId, order.status);
+    }
+
+    if (!isOrderStatusTransitionAllowed(order.status, nextStatus)) {
+      throw invalidOrderStatusTransitionError(order.status, nextStatus);
+    }
+
+    const updatedOrder =
+      await this.dependencies.orderRepository.updateStatusIfCurrent(
+        orderId,
+        order.status,
+        nextStatus
+      );
+
+    if (!updatedOrder) {
+      const currentOrder = await this.dependencies.orderRepository.findById(orderId);
+
+      if (!currentOrder) {
+        throw orderNotFoundError();
+      }
+
+      throw orderStatusConflictError();
+    }
+
+    return toSafeAdminOrderResponse(updatedOrder);
+  }
+
+  public async cancelOrder(
+    orderId: string,
+    expectedStatus?: OrderStatus
+  ): Promise<SafeAdminOrderResponse> {
+    if (expectedStatus) {
+      const cancellation =
+        await this.dependencies.orderRepository.beginCancellation(
+          orderId,
+          expectedStatus
+        );
+
+      if (!cancellation) {
+        return this.resolveFailedCancellation(orderId);
+      }
+
+      return this.restoreCancelledOrder(cancellation);
+    }
+
+    const order = await this.findOrderOrThrow(orderId);
+
+    if (order.status === ORDER_STATUSES.CANCELLED) {
+      if (order.inventoryStatus === INVENTORY_STATUSES.RELEASED) {
+        return toSafeAdminOrderResponse(order);
+      }
+
+      if (order.inventoryStatus === INVENTORY_STATUSES.RESTORING) {
+        return this.restoreCancelledOrder(order);
+      }
+
+      throw invalidInventoryStateError();
+    }
+
+    if (!isOrderStatusTransitionAllowed(order.status, ORDER_STATUSES.CANCELLED)) {
+      throw invalidOrderStatusTransitionError(
+        order.status,
+        ORDER_STATUSES.CANCELLED
+      );
+    }
+
+    const cancellation =
+      await this.dependencies.orderRepository.beginCancellation(
+        orderId,
+        order.status
+      );
+
+    if (!cancellation) {
+      return this.resolveFailedCancellation(orderId);
+    }
+
+    return this.restoreCancelledOrder(cancellation);
+  }
+
+  private async resolveFailedCancellation(
+    orderId: string
+  ): Promise<SafeAdminOrderResponse> {
+    const currentOrder = await this.dependencies.orderRepository.findById(orderId);
+
+    if (!currentOrder) {
+      throw orderNotFoundError();
+    }
+
+    if (currentOrder.status === ORDER_STATUSES.CANCELLED) {
+      if (currentOrder.inventoryStatus === INVENTORY_STATUSES.RELEASED) {
+        return toSafeAdminOrderResponse(currentOrder);
+      }
+
+      if (currentOrder.inventoryStatus === INVENTORY_STATUSES.RESTORING) {
+        return this.restoreCancelledOrder(currentOrder);
+      }
+
+      throw invalidInventoryStateError();
+    }
+
+    if (
+      !isOrderStatusTransitionAllowed(currentOrder.status, ORDER_STATUSES.CANCELLED)
+    ) {
+      throw invalidOrderStatusTransitionError(
+        currentOrder.status,
+        ORDER_STATUSES.CANCELLED
+      );
+    }
+
+    throw orderStatusConflictError();
+  }
+
+  private async findOrderOrThrow(orderId: string): Promise<OrderDocument> {
+    const order = await this.dependencies.orderRepository.findById(orderId);
+
+    if (!order) {
+      throw orderNotFoundError();
+    }
+
+    return order;
+  }
+
+  private async restoreCancelledOrder(
+    order: OrderDocument
+  ): Promise<SafeAdminOrderResponse> {
+    const restorationItems = toRestorationItems(order.items);
+    const failures: string[] = [];
+    const orderId = order._id.toString();
+
+    for (const item of restorationItems) {
+      const productId = item.productId.toString();
+
+      try {
+        const result = await this.dependencies.productRepository.restoreStockOnce(
+          item.productId,
+          item.quantity,
+          toCancellationOperationKey(orderId, productId)
+        );
+
+        if (result.status === STOCK_RESTORATION_STATUSES.PRODUCT_NOT_FOUND) {
+          failures.push(`${productId}:${item.quantity}`);
+        }
+      } catch {
+        failures.push(`${productId}:${item.quantity}`);
+      }
+    }
+
+    if (failures.length > 0) {
+      console.error(
+        `[orders] inventory restoration failed for order ${orderId}: ${failures.join(', ')}`
+      );
+
+      throw inventoryRestorationFailedError();
+    }
+
+    const releasedOrder =
+      await this.dependencies.orderRepository.completeInventoryRelease(order._id);
+
+    if (!releasedOrder) {
+      const currentOrder = await this.dependencies.orderRepository.findById(order._id);
+
+      if (
+        currentOrder?.status === ORDER_STATUSES.CANCELLED &&
+        currentOrder.inventoryStatus === INVENTORY_STATUSES.RELEASED
+      ) {
+        return toSafeAdminOrderResponse(currentOrder);
+      }
+
+      throw inventoryRestorationFailedError();
+    }
+
+    return toSafeAdminOrderResponse(releasedOrder);
   }
 
   private async preValidateProducts(

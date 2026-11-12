@@ -9,6 +9,7 @@ const removeInternalFields = (
   returnedObject: Record<string, unknown>
 ): Record<string, unknown> => {
   delete returnedObject.__v;
+  delete returnedObject.stockRestorationKeys;
   return returnedObject;
 };
 
@@ -95,6 +96,11 @@ const productSchema = new Schema<Product>(
         message: '{VALUE} is not a supported product status',
       },
       default: PRODUCT_STATUSES.ACTIVE,
+    },
+    stockRestorationKeys: {
+      type: [String],
+      default: [],
+      select: false,
     },
   },
   {

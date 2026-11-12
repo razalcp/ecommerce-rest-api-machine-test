@@ -16,6 +16,8 @@ import {
   PRODUCT_STATUSES,
   PublicPaginatedProductResult,
   PublicProductFilters,
+  STOCK_RESTORATION_STATUSES,
+  StockRestorationResult,
   UpdateProductData,
 } from './product.types';
 
@@ -229,6 +231,45 @@ export class MongooseProductRepository implements ProductRepository {
     }
 
     return product;
+  }
+
+  public async restoreStockOnce(
+    productId: ProductId,
+    quantity: number,
+    operationKey: string
+  ): Promise<StockRestorationResult> {
+    const restoredProduct = await ProductModel.findOneAndUpdate(
+      {
+        _id: productId,
+        stockRestorationKeys: { $ne: operationKey },
+      },
+      {
+        $inc: { stock: quantity },
+        $addToSet: { stockRestorationKeys: operationKey },
+      },
+      { returnDocument: 'after', runValidators: true }
+    ).exec();
+
+    if (restoredProduct) {
+      return {
+        status: STOCK_RESTORATION_STATUSES.APPLIED,
+        product: restoredProduct,
+      };
+    }
+
+    const existingProduct = await ProductModel.findById(productId).exec();
+
+    if (!existingProduct) {
+      return {
+        status: STOCK_RESTORATION_STATUSES.PRODUCT_NOT_FOUND,
+        product: null,
+      };
+    }
+
+    return {
+      status: STOCK_RESTORATION_STATUSES.ALREADY_APPLIED,
+      product: existingProduct,
+    };
   }
 
   public async existsByCategoryId(categoryId: ProductId): Promise<boolean> {

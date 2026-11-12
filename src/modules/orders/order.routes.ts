@@ -3,7 +3,7 @@ import { authenticate } from '../../shared/middleware/auth.middleware';
 import { authorizeRoles } from '../../shared/middleware/role.middleware';
 import { validateBody } from '../../shared/middleware/validate.middleware';
 import { USER_ROLES } from '../users/user.types';
-import { createOrder } from './order.controller';
+import { createOrder, getMyOrder, listMyOrders } from './order.controller';
 import { createOrderSchema } from './order.validation';
 
 const orderRoutes = Router();
@@ -81,6 +81,7 @@ orderRoutes.use(authorizeRoles(USER_ROLES.CUSTOMER));
  *                   currency: INR
  *                   status: PENDING
  *                   createdAt: '2026-11-12T10:00:00.000Z'
+ *                   updatedAt: '2026-11-12T10:00:00.000Z'
  *       '401':
  *         description: Authentication required, invalid or expired token, inactive account, or stale token version
  *         content:
@@ -169,5 +170,217 @@ orderRoutes.use(authorizeRoles(USER_ROLES.CUSTOMER));
  *                     code: CHECKOUT_COMPENSATION_FAILED
  */
 orderRoutes.post('/', validateBody(createOrderSchema), createOrder);
+
+/**
+ * @openapi
+ * /orders:
+ *   get:
+ *     tags: [Orders]
+ *     summary: List the authenticated customer's orders
+ *     description: >-
+ *       Returns a paginated list of orders belonging to the authenticated CUSTOMER.
+ *       The customer identity is taken exclusively from the JWT access token; customerId
+ *       is not accepted as a query parameter. Results are sorted by creation date, newest
+ *       first. Only customer-safe fields are returned; internal inventory status and the
+ *       customer ID are omitted.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         description: Page number, starting at 1.
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         description: Number of orders per page.
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 50
+ *           default: 10
+ *     responses:
+ *       '200':
+ *         description: Orders retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderListResponse'
+ *             example:
+ *               success: true
+ *               message: Orders retrieved successfully
+ *               data:
+ *                 orders:
+ *                   - id: 665f1b2c9a1b2c3d4e5f6800
+ *                     items:
+ *                       - productId: 665f1b2c9a1b2c3d4e5f6795
+ *                         name: Samsung Galaxy S24
+ *                         sku: SAMSUNG-S24
+ *                         quantity: 2
+ *                         unitPrice: 74999.99
+ *                         lineTotal: 149999.98
+ *                     subtotal: 149999.98
+ *                     total: 149999.98
+ *                     currency: INR
+ *                     status: PENDING
+ *                     createdAt: '2026-11-12T10:00:00.000Z'
+ *                     updatedAt: '2026-11-12T10:00:00.000Z'
+ *                 pagination:
+ *                   page: 1
+ *                   limit: 10
+ *                   total: 1
+ *                   totalPages: 1
+ *       '401':
+ *         description: Authentication required, invalid or expired token, inactive account, or stale token version
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               success: false
+ *               message: Authentication required
+ *               error:
+ *                 code: AUTHENTICATION_REQUIRED
+ *       '403':
+ *         description: Customer access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               success: false
+ *               message: You do not have permission to perform this action
+ *               error:
+ *                 code: FORBIDDEN
+ *       '422':
+ *         description: Query validation failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               success: false
+ *               message: 'limit: Limit must not exceed 50'
+ *               error:
+ *                 code: VALIDATION_ERROR
+ *       '500':
+ *         description: Unexpected server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               success: false
+ *               message: Internal server error
+ *               error:
+ *                 code: INTERNAL_SERVER_ERROR
+ */
+orderRoutes.get('/', listMyOrders);
+
+/**
+ * @openapi
+ * /orders/{id}:
+ *   get:
+ *     tags: [Orders]
+ *     summary: Get one of the authenticated customer's orders
+ *     description: >-
+ *       Returns a single order only when it belongs to the authenticated CUSTOMER. An order
+ *       owned by another customer is reported as not found. Internal inventory status and
+ *       the customer ID are omitted from the customer response.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: MongoDB order ID.
+ *         schema:
+ *           type: string
+ *           pattern: '^[a-fA-F0-9]{24}$'
+ *     responses:
+ *       '200':
+ *         description: Order retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderResponse'
+ *             example:
+ *               success: true
+ *               message: Order retrieved successfully
+ *               data:
+ *                 order:
+ *                   id: 665f1b2c9a1b2c3d4e5f6800
+ *                   items:
+ *                     - productId: 665f1b2c9a1b2c3d4e5f6795
+ *                       name: Samsung Galaxy S24
+ *                       sku: SAMSUNG-S24
+ *                       quantity: 2
+ *                       unitPrice: 74999.99
+ *                       lineTotal: 149999.98
+ *                   subtotal: 149999.98
+ *                   total: 149999.98
+ *                   currency: INR
+ *                   status: CONFIRMED
+ *                   createdAt: '2026-11-12T10:00:00.000Z'
+ *                   updatedAt: '2026-11-12T11:00:00.000Z'
+ *       '401':
+ *         description: Authentication required, invalid or expired token, inactive account, or stale token version
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               success: false
+ *               message: Authentication required
+ *               error:
+ *                 code: AUTHENTICATION_REQUIRED
+ *       '403':
+ *         description: Customer access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               success: false
+ *               message: You do not have permission to perform this action
+ *               error:
+ *                 code: FORBIDDEN
+ *       '404':
+ *         description: Order not found or does not belong to the authenticated customer
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               success: false
+ *               message: Order not found
+ *               error:
+ *                 code: ORDER_NOT_FOUND
+ *       '422':
+ *         description: Order ID validation failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               success: false
+ *               message: 'id: Order ID must be a valid MongoDB ObjectId'
+ *               error:
+ *                 code: VALIDATION_ERROR
+ *       '500':
+ *         description: Unexpected server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               success: false
+ *               message: Internal server error
+ *               error:
+ *                 code: INTERNAL_SERVER_ERROR
+ */
+orderRoutes.get('/:id', getMyOrder);
 
 export default orderRoutes;

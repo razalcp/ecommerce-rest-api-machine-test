@@ -14,7 +14,7 @@ const definition: SwaggerDefinition = {
   info: {
     title: 'E-commerce REST API',
     description:
-      'A modular, layered REST API for an e-commerce platform. It provides health checks, customer registration and login, JWT access tokens, opaque refresh tokens, refresh-token rotation, logout, authenticated profile access, admin user management, public category browsing, admin category management, public product browsing, admin product management, and customer order creation with atomic inventory reservation.',
+      'A modular, layered REST API for an e-commerce platform. It provides health checks, customer registration and login, JWT access tokens, opaque refresh tokens, refresh-token rotation, logout, authenticated profile access, admin user management, public category browsing, admin category management, public product browsing, admin product management, customer order creation with atomic inventory reservation, customer order history, admin order management, controlled order status transitions, and idempotent inventory restoration on cancellation.',
     version: '1.0.0',
   },
   servers: [
@@ -46,7 +46,8 @@ const definition: SwaggerDefinition = {
     },
     {
       name: 'Orders',
-      description: 'Customer order creation and inventory reservation',
+      description:
+        'Customer order creation and history, admin order management, controlled status transitions, cancellation, and idempotent inventory restoration',
     },
   ],
   components: {
@@ -1014,6 +1015,7 @@ const definition: SwaggerDefinition = {
           'currency',
           'status',
           'createdAt',
+          'updatedAt',
         ],
         properties: {
           id: {
@@ -1062,6 +1064,185 @@ const definition: SwaggerDefinition = {
             format: 'date-time',
             example: '2026-11-12T10:00:00.000Z',
           },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-11-12T10:00:00.000Z',
+          },
+        },
+      },
+      AdminOrder: {
+        type: 'object',
+        required: [
+          'id',
+          'customerId',
+          'items',
+          'subtotal',
+          'total',
+          'currency',
+          'status',
+          'inventoryStatus',
+          'createdAt',
+          'updatedAt',
+        ],
+        properties: {
+          id: {
+            type: 'string',
+            pattern: '^[a-fA-F0-9]{24}$',
+            example: '665f1b2c9a1b2c3d4e5f6800',
+          },
+          customerId: {
+            type: 'string',
+            pattern: '^[a-fA-F0-9]{24}$',
+            description: 'Customer MongoDB ObjectId.',
+            example: '665f1b2c9a1b2c3d4e5f6789',
+          },
+          items: {
+            type: 'array',
+            items: {
+              $ref: '#/components/schemas/OrderItemSnapshot',
+            },
+          },
+          subtotal: {
+            type: 'number',
+            format: 'double',
+            example: 149999.98,
+          },
+          total: {
+            type: 'number',
+            format: 'double',
+            example: 149999.98,
+          },
+          currency: {
+            type: 'string',
+            enum: ['INR'],
+            example: 'INR',
+          },
+          status: {
+            type: 'string',
+            enum: [
+              'PENDING',
+              'CONFIRMED',
+              'PROCESSING',
+              'SHIPPED',
+              'DELIVERED',
+              'CANCELLED',
+            ],
+            example: 'CONFIRMED',
+          },
+          inventoryStatus: {
+            type: 'string',
+            enum: ['RESERVED', 'RESTORING', 'RELEASED'],
+            description:
+              'Internal inventory state. RESTORING indicates that cancellation was saved but stock restoration is incomplete and should be retried.',
+            example: 'RESERVED',
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-11-12T10:00:00.000Z',
+          },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+            example: '2026-11-12T11:00:00.000Z',
+          },
+        },
+      },
+      OrderListResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Orders retrieved successfully',
+          },
+          data: {
+            type: 'object',
+            required: ['orders', 'pagination'],
+            properties: {
+              orders: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/Order',
+                },
+              },
+              pagination: {
+                type: 'object',
+                required: ['page', 'limit', 'total', 'totalPages'],
+                properties: {
+                  page: {
+                    type: 'integer',
+                    example: 1,
+                  },
+                  limit: {
+                    type: 'integer',
+                    example: 10,
+                  },
+                  total: {
+                    type: 'integer',
+                    example: 42,
+                  },
+                  totalPages: {
+                    type: 'integer',
+                    example: 5,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      AdminOrderListResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Orders retrieved successfully',
+          },
+          data: {
+            type: 'object',
+            required: ['orders', 'pagination'],
+            properties: {
+              orders: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/AdminOrder',
+                },
+              },
+              pagination: {
+                type: 'object',
+                required: ['page', 'limit', 'total', 'totalPages'],
+                properties: {
+                  page: {
+                    type: 'integer',
+                    example: 1,
+                  },
+                  limit: {
+                    type: 'integer',
+                    example: 10,
+                  },
+                  total: {
+                    type: 'integer',
+                    example: 42,
+                  },
+                  totalPages: {
+                    type: 'integer',
+                    example: 5,
+                  },
+                },
+              },
+            },
+          },
         },
       },
       OrderResponse: {
@@ -1084,6 +1265,43 @@ const definition: SwaggerDefinition = {
                 $ref: '#/components/schemas/Order',
               },
             },
+          },
+        },
+      },
+      AdminOrderResponse: {
+        type: 'object',
+        required: ['success', 'message', 'data'],
+        properties: {
+          success: {
+            type: 'boolean',
+            example: true,
+          },
+          message: {
+            type: 'string',
+            example: 'Order retrieved successfully',
+          },
+          data: {
+            type: 'object',
+            required: ['order'],
+            properties: {
+              order: {
+                $ref: '#/components/schemas/AdminOrder',
+              },
+            },
+          },
+        },
+      },
+      UpdateOrderStatusRequest: {
+        type: 'object',
+        required: ['status'],
+        additionalProperties: false,
+        properties: {
+          status: {
+            type: 'string',
+            enum: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'],
+            description:
+              'Target status. PENDING cannot be set directly. Invalid transitions return HTTP 409.',
+            example: 'CONFIRMED',
           },
         },
       },

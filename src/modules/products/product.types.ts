@@ -33,6 +33,7 @@ export interface Product {
   stock: number;
   category: Types.ObjectId;
   status: ProductStatus;
+  stockRestorationKeys: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,6 +41,35 @@ export interface Product {
 export type ProductDocument = HydratedDocument<Product>;
 export type ProductRecord = Product & { _id: Types.ObjectId };
 export type ProductId = string | Types.ObjectId;
+
+export const STOCK_RESTORATION_STATUSES = {
+  APPLIED: 'APPLIED',
+  ALREADY_APPLIED: 'ALREADY_APPLIED',
+  PRODUCT_NOT_FOUND: 'PRODUCT_NOT_FOUND',
+} as const;
+
+export type StockRestorationStatus =
+  (typeof STOCK_RESTORATION_STATUSES)[keyof typeof STOCK_RESTORATION_STATUSES];
+
+export interface StockRestorationAppliedResult {
+  status: typeof STOCK_RESTORATION_STATUSES.APPLIED;
+  product: ProductDocument;
+}
+
+export interface StockRestorationAlreadyAppliedResult {
+  status: typeof STOCK_RESTORATION_STATUSES.ALREADY_APPLIED;
+  product: ProductDocument;
+}
+
+export interface StockRestorationProductNotFoundResult {
+  status: typeof STOCK_RESTORATION_STATUSES.PRODUCT_NOT_FOUND;
+  product: null;
+}
+
+export type StockRestorationResult =
+  | StockRestorationAppliedResult
+  | StockRestorationAlreadyAppliedResult
+  | StockRestorationProductNotFoundResult;
 
 export interface CreateProductInput {
   name: string;
@@ -183,5 +213,10 @@ export interface ProductRepository {
     quantity: number
   ): Promise<ProductDocument | null>;
   restoreStock(productId: ProductId, quantity: number): Promise<ProductDocument>;
+  restoreStockOnce(
+    productId: ProductId,
+    quantity: number,
+    operationKey: string
+  ): Promise<StockRestorationResult>;
   existsByCategoryId(categoryId: ProductId): Promise<boolean>;
 }
